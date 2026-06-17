@@ -1,0 +1,66 @@
+import { Router } from 'express';
+import { authenticate } from '../middleware/auth.js';
+import { login, me, cambiarPassword } from '../controllers/auth.controller.js';
+import * as clientes   from '../controllers/clientes.controller.js';
+import * as productos  from '../controllers/productos.controller.js';
+import * as compras    from '../controllers/compras.controller.js';
+import * as gastos     from '../controllers/gastos.controller.js';
+import * as ventas     from '../controllers/ventas.controller.js';
+import * as ordenes    from '../controllers/ordenes.controller.js';
+import * as credito    from '../controllers/credito.controller.js';
+import * as reportes   from '../controllers/reportes.controller.js';
+
+const r = Router();
+
+// ── Auth ────────────────────────────────────────────
+r.post('/auth/login',            login);
+r.get ('/auth/me',               authenticate, me);
+r.post('/auth/cambiar-password', authenticate, cambiarPassword);
+
+// ── Clientes & Vehículos ────────────────────────────
+r.get ('/clientes',                       authenticate, clientes.listar);
+r.get ('/clientes/:id',                   authenticate, clientes.obtener);
+r.post('/clientes',                       authenticate, clientes.crear);
+r.put ('/clientes/:id',                   authenticate, clientes.actualizar);
+r.post('/clientes/:id/vehiculos',         authenticate, clientes.crearVehiculo);
+
+// ── Productos / Inventario ──────────────────────────
+r.get ('/productos',                      authenticate, productos.listar);
+r.get ('/productos/:id',                  authenticate, productos.obtener);
+r.post('/productos',                      authenticate, productos.crear);
+r.put ('/productos/:id',                  authenticate, productos.actualizar);
+r.post('/productos/:id/stock',            authenticate, productos.ajustarStock);
+
+// ── Compras ─────────────────────────────────────────
+r.get ('/compras',                        authenticate, compras.listar);
+r.get ('/compras/:id',                    authenticate, compras.obtener);
+r.post('/compras',                        authenticate, compras.crear);
+
+// ── Gastos ──────────────────────────────────────────
+r.get ('/gastos',                         authenticate, gastos.listar);
+r.get ('/gastos/resumen/categoria',       authenticate, gastos.resumenPorCategoria);
+r.post('/gastos',                         authenticate, gastos.crear);
+r.put ('/gastos/:id',                     authenticate, gastos.actualizar);
+r.delete('/gastos/:id',                   authenticate, gastos.eliminar);
+
+// ── Ventas ──────────────────────────────────────────
+r.get ('/ventas',                         authenticate, ventas.listar);
+r.get ('/ventas/resumen',                 authenticate, ventas.resumenDia);
+r.post('/ventas',                         authenticate, ventas.crear);
+
+// ── Órdenes de servicio ─────────────────────────────
+r.get ('/ordenes',                        authenticate, ordenes.listar);
+r.get ('/ordenes/:id',                    authenticate, ordenes.obtener);
+r.post('/ordenes',                        authenticate, ordenes.crear);
+r.patch('/ordenes/:id/estado',            authenticate, ordenes.cambiarEstado);
+
+// ── Crédito / CxC ───────────────────────────────────
+r.get ('/credito',                        authenticate, credito.listar);
+r.post('/credito/:id/pago',               authenticate, credito.registrarPago);
+
+// ── Reportes & Dashboard ────────────────────────────
+r.get ('/reportes/dashboard',             authenticate, reportes.dashboard);
+r.get ('/reportes/ventas',                authenticate, reportes.ventasPorPeriodo);
+r.get ('/reportes/utilidad',              authenticate, reportes.utilidadBruta);
+
+export default r;
