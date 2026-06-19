@@ -1,0 +1,81 @@
+// ─── Cliente API centralizado ─────────────────────────────────────────────────
+const BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
+
+const getToken = () => localStorage.getItem('llantera_token');
+
+const headers = () => ({
+  'Content-Type': 'application/json',
+  ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
+});
+
+const handle = async (res) => {
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
+  return data;
+};
+
+export const api = {
+  // Auth
+  login: (email, password) =>
+    fetch(`${BASE}/auth/login`, { method: 'POST', headers: headers(), body: JSON.stringify({ email, password }) }).then(handle),
+  me: () =>
+    fetch(`${BASE}/auth/me`, { headers: headers() }).then(handle),
+
+  // Dashboard
+  dashboard: () =>
+    fetch(`${BASE}/reportes/dashboard`, { headers: headers() }).then(handle),
+
+  // Órdenes
+  ordenes: (params = '') =>
+    fetch(`${BASE}/ordenes?${params}`, { headers: headers() }).then(handle),
+  crearOrden: (data) =>
+    fetch(`${BASE}/ordenes`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle),
+  cambiarEstadoOrden: (id, estado) =>
+    fetch(`${BASE}/ordenes/${id}/estado`, { method: 'PATCH', headers: headers(), body: JSON.stringify({ estado }) }).then(handle),
+
+  // Productos / Inventario
+  productos: (params = '') =>
+    fetch(`${BASE}/productos?${params}`, { headers: headers() }).then(handle),
+  crearProducto: (data) =>
+    fetch(`${BASE}/productos`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle),
+  actualizarProducto: (id, data) =>
+    fetch(`${BASE}/productos/${id}`, { method: 'PUT', headers: headers(), body: JSON.stringify(data) }).then(handle),
+
+  // Ventas
+  ventas: (params = '') =>
+    fetch(`${BASE}/ventas?${params}`, { headers: headers() }).then(handle),
+  crearVenta: (data) =>
+    fetch(`${BASE}/ventas`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle),
+
+  // Compras
+  compras: (params = '') =>
+    fetch(`${BASE}/compras?${params}`, { headers: headers() }).then(handle),
+  crearCompra: (data) =>
+    fetch(`${BASE}/compras`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle),
+
+  // Gastos
+  gastos: (params = '') =>
+    fetch(`${BASE}/gastos?${params}`, { headers: headers() }).then(handle),
+  crearGasto: (data) =>
+    fetch(`${BASE}/gastos`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle),
+  actualizarGasto: (id, data) =>
+    fetch(`${BASE}/gastos/${id}`, { method: 'PUT', headers: headers(), body: JSON.stringify(data) }).then(handle),
+  eliminarGasto: (id) =>
+    fetch(`${BASE}/gastos/${id}`, { method: 'DELETE', headers: headers() }).then(handle),
+
+  // Clientes
+  clientes: (params = '') =>
+    fetch(`${BASE}/clientes?${params}`, { headers: headers() }).then(handle),
+  crearCliente: (data) =>
+    fetch(`${BASE}/clientes`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle),
+  actualizarCliente: (id, data) =>
+    fetch(`${BASE}/clientes/${id}`, { method: 'PUT', headers: headers(), body: JSON.stringify(data) }).then(handle),
+
+  // Crédito
+  credito: (params = '') =>
+    fetch(`${BASE}/credito?${params}`, { headers: headers() }).then(handle),
+  registrarPago: (id, data) =>
+    fetch(`${BASE}/credito/${id}/pago`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle),
+};
+
+export default api;
