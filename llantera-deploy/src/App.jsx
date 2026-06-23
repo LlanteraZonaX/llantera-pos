@@ -425,6 +425,15 @@ function Inventario({ onNuevoProducto }) {
 }
 
 // ─── Modal Fotos de Producto ──────────────────────────────────────────────────
+// Convierte links de Google Drive (vista compartida) a formato de imagen directa.
+// Si la URL no es de Drive, la regresa tal cual sin tocarla.
+function normalizarUrlFoto(url) {
+  const limpia = url.trim();
+  const match = limpia.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (match) return `https://drive.google.com/uc?export=view&id=${match[1]}`;
+  return limpia;
+}
+
 function ModalFotosProducto({ producto, onClose, onSaved }) {
   const [url, setUrl] = useState("");
   const [fotos, setFotos] = useState(producto.fotos || []);
@@ -435,7 +444,8 @@ function ModalFotosProducto({ producto, onClose, onSaved }) {
     if (!url.trim()) return;
     setLoading(true); setError("");
     try {
-      const nueva = await api.agregarFotoProducto(producto.id, { url: url.trim(), es_principal: fotos.length === 0 });
+      const urlFinal = normalizarUrlFoto(url);
+      const nueva = await api.agregarFotoProducto(producto.id, { url: urlFinal, es_principal: fotos.length === 0 });
       setFotos(p => [...p, nueva]);
       setUrl("");
     } catch (e) { setError(e.message); } finally { setLoading(false); }
@@ -454,7 +464,7 @@ function ModalFotosProducto({ producto, onClose, onSaved }) {
         </div>
         {error && <div style={{ background: "#FEE2E2", color: "#B91C1C", borderRadius: 8, padding: "8px 12px", fontSize: 12, marginBottom: 12 }}>{error}</div>}
         <p style={{ fontSize: 11, color: "var(--color-text-secondary)", marginBottom: 12 }}>
-          Pega la URL pública de una foto (subida a Google Drive, Imgur, etc. con enlace compartible). La primera foto se usa como principal para cotizaciones.
+          Pega la URL pública de una foto. Los links de Google Drive se convierten automáticamente al formato correcto — asegúrate de que el archivo esté compartido como <strong>"Cualquier persona con el enlace"</strong>, no solo con personas específicas. La primera foto se usa como principal para cotizaciones.
         </p>
         <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
           <input style={{ ...inputStyle, flex: 1 }} placeholder="https://..." value={url} onChange={e => setUrl(e.target.value)} />
