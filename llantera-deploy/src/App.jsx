@@ -640,7 +640,165 @@ function Clientes() {
   );
 }
 
-// ─── Catálogo + Cotizador (para vendedores) ───────────────────────────────────
+// ─── Gestión de Usuarios (solo admin) ─────────────────────────────────────────
+function Usuarios() {
+  const [lista, setLista] = useState([]);
+  const [roles, setRoles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState(null); // { tipo: 'nuevo'|'editar'|'password', usuario }
+
+  const cargar = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [u, r] = await Promise.all([api.usuarios(), api.rolesDisponibles()]);
+      setLista(u.data || []);
+      setRoles(r || []);
+    } catch {}
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  const toggleActivo = async (u) => {
+    try { await api.actualizarUsuario(u.id, { activo: !u.activo }); cargar(); } catch {}
+  };
+
+  const ROL_INFO = {
+    admin:   { color: "#7C3AED", label: "Administrador", desc: "Acceso total al sistema" },
+    gerente: { color: "#0EA5E9", label: "Gerente",        desc: "Ventas, compras, reportes y gastos" },
+    cajero:  { color: "#059669", label: "Cajero",         desc: "Ventas, órdenes y clientes" },
+    tecnico: { color: "#D97706", label: "Técnico",        desc: "Órdenes de servicio" },
+    vendedor:{ color: "#DB2777", label: "Vendedor",       desc: "Solo catálogo, precios, fotos y cotizaciones" },
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
+        <button onClick={() => setModal({ tipo: "nuevo" })} style={{ padding: "8px 18px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>+ Nuevo usuario</button>
+      </div>
+
+      {loading ? <div style={{ textAlign: "center", padding: 40, color: "var(--color-text-secondary)" }}>Cargando...</div> : (
+        <div style={{ background: "var(--color-background-secondary)", borderRadius: 12, border: "1px solid var(--color-border-tertiary)", overflow: "hidden" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: "var(--color-background-tertiary)" }}>
+                {["Nombre", "Email", "Rol", "Estado", ""].map(h =>
+                  <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontWeight: 600, fontSize: 11, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{h}</th>
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {lista.map(u => {
+                const info = ROL_INFO[u.rol] || { color: "#64748B", label: u.rol };
+                return (
+                  <tr key={u.id} style={{ borderTop: "1px solid var(--color-border-tertiary)" }}>
+                    <td style={{ padding: "10px 14px", fontWeight: 500 }}>{u.nombre}</td>
+                    <td style={{ padding: "10px 14px", color: "var(--color-text-secondary)" }}>{u.email}</td>
+                    <td style={{ padding: "10px 14px" }}>
+                      <span style={{ background: info.color + "22", color: info.color, fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20 }}>{info.label}</span>
+                    </td>
+                    <td style={{ padding: "10px 14px" }}>
+                      <span style={{ background: u.activo ? "#D1FAE5" : "#FEE2E2", color: u.activo ? "#065F46" : "#B91C1C", fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20 }}>{u.activo ? "Activo" : "Inactivo"}</span>
+                    </td>
+                    <td style={{ padding: "10px 14px", textAlign: "right", whiteSpace: "nowrap" }}>
+                      <button onClick={() => setModal({ tipo: "password", usuario: u })} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "#1D4ED8", marginRight: 12 }}>Resetear clave</button>
+                      <button onClick={() => toggleActivo(u)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: u.activo ? "#B91C1C" : "#059669" }}>{u.activo ? "Desactivar" : "Activar"}</button>
+                    </td>
+                  </tr>
+                );
+              })}
+              {!lista.length && <tr><td colSpan={5} style={{ padding: 40, textAlign: "center", color: "var(--color-text-secondary)" }}>Sin usuarios todavía</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div style={{ marginTop: 16, fontSize: 12, color: "var(--color-text-secondary)" }}>
+        <strong>Roles disponibles:</strong> {Object.values(ROL_INFO).map(r => r.label).join(" · ")}
+      </div>
+
+      {modal?.tipo === "nuevo"    && <ModalUsuario roles={roles} onClose={() => setModal(null)} onSaved={() => { setModal(null); cargar(); }} />}
+      {modal?.tipo === "password" && <ModalResetPassword usuario={modal.usuario} onClose={() => setModal(null)} onSaved={() => setModal(null)} />}
+    </div>
+  );
+}
+
+function ModalUsuario({ roles, onClose, onSaved }) {
+  const [form, setForm] = useState({ nombre: "", email: "", password: "", rol_id: roles.find(r => r.nombre === "vendedor")?.id || roles[0]?.id || "" });
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError(""); setLoading(true);
+    try {
+      await api.crearUsuario(form);
+      onSaved();
+    } catch (err) { setError(err.message || "Error al crear usuario"); } finally { setLoading(false); }
+  };
+
+  return (
+    <div style={overlayStyle}>
+      <form onSubmit={submit} style={{ ...modalBase, maxWidth: 380 }}>
+        <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 600 }}>👤 Nuevo usuario</h2>
+        {error && <div style={{ background: "#FEE2E2", color: "#B91C1C", borderRadius: 8, padding: "8px 12px", fontSize: 12, marginBottom: 12 }}>{error}</div>}
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <input style={inputStyle} placeholder="Nombre completo" required value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} />
+          <input style={inputStyle} type="email" placeholder="Email" required value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+          <input style={inputStyle} type="password" placeholder="Contraseña (mínimo 6 caracteres)" required minLength={6} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} />
+          <select style={inputStyle} value={form.rol_id} onChange={e => setForm({ ...form, rol_id: e.target.value })}>
+            {roles.map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}
+          </select>
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
+          <button type="button" onClick={onClose} style={{ flex: 1, padding: "9px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
+          <button type="submit" disabled={loading} style={{ flex: 1, padding: "9px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>{loading ? "Creando..." : "Crear usuario"}</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function ModalResetPassword({ usuario, onClose, onSaved }) {
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [ok, setOk] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError(""); setLoading(true);
+    try {
+      await api.resetPasswordUsuario(usuario.id, password);
+      setOk(true);
+    } catch (err) { setError(err.message || "Error al restablecer contraseña"); } finally { setLoading(false); }
+  };
+
+  return (
+    <div style={overlayStyle}>
+      <div style={{ ...modalBase, maxWidth: 360 }}>
+        <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 600 }}>🔑 Restablecer clave de {usuario.nombre}</h2>
+        {ok ? (
+          <div>
+            <div style={{ background: "#D1FAE5", color: "#065F46", borderRadius: 8, padding: "10px 12px", fontSize: 13, marginBottom: 16 }}>Contraseña actualizada correctamente.</div>
+            <button onClick={() => { onSaved(); onClose(); }} style={{ width: "100%", padding: "9px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Cerrar</button>
+          </div>
+        ) : (
+          <form onSubmit={submit}>
+            {error && <div style={{ background: "#FEE2E2", color: "#B91C1C", borderRadius: 8, padding: "8px 12px", fontSize: 12, marginBottom: 12 }}>{error}</div>}
+            <input style={inputStyle} type="password" placeholder="Nueva contraseña (mínimo 6 caracteres)" required minLength={6} value={password} onChange={e => setPassword(e.target.value)} autoFocus />
+            <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+              <button type="button" onClick={onClose} style={{ flex: 1, padding: "9px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
+              <button type="submit" disabled={loading} style={{ flex: 1, padding: "9px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>{loading ? "Guardando..." : "Restablecer"}</button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
 function Catalogo() {
   const [productos, setProductos] = useState([]);
   const [buscar, setBuscar] = useState("");
@@ -792,6 +950,7 @@ const NAV = [
   { id: "compras",     icon: "🚚", label: "Compras",             permiso: "compras" },
   { id: "gastos",      icon: "💸", label: "Gastos",              permiso: "gastos" },
   { id: "clientes",    icon: "👥", label: "Clientes / CRM",      permiso: "clientes" },
+  { id: "usuarios",    icon: "🔐", label: "Usuarios",            permiso: "todo" },
 ];
 
 const puedeVer = (permisos, clave) => {
@@ -944,6 +1103,7 @@ function AppPrivada() {
         {seccionActiva === "compras"     && <Compras onNuevaCompra={() => setModal("compra")} />}
         {seccionActiva === "gastos"      && <Gastos onNuevoGasto={() => setModal("gasto")} />}
         {seccionActiva === "clientes"    && <Clientes />}
+        {seccionActiva === "usuarios"    && <Usuarios />}
       </main>
 
       {/* Modales */}

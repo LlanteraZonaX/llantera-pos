@@ -93,6 +93,18 @@ export const api = {
   // Esta SÍ es pública, no requiere headers de auth (la usa el cliente final)
   verCotizacionPublica: (token) =>
     fetch(`${BASE}/cotizaciones/publica/${token}`).then(handle),
+
+  // Gestión de usuarios (solo admin)
+  usuarios: () =>
+    fetch(`${BASE}/usuarios`, { headers: headers() }).then(handle),
+  rolesDisponibles: () =>
+    fetch(`${BASE}/usuarios/roles`, { headers: headers() }).then(handle),
+  crearUsuario: (data) =>
+    fetch(`${BASE}/usuarios`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle),
+  actualizarUsuario: (id, data) =>
+    fetch(`${BASE}/usuarios/${id}`, { method: 'PUT', headers: headers(), body: JSON.stringify(data) }).then(handle),
+  resetPasswordUsuario: (id, password_nuevo) =>
+    fetch(`${BASE}/usuarios/${id}/reset-password`, { method: 'POST', headers: headers(), body: JSON.stringify({ password_nuevo }) }).then(handle),
 };
 
 export default api;

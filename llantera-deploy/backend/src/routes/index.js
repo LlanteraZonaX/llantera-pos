@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, authorize } from '../middleware/auth.js';
 import { login, me, cambiarPassword } from '../controllers/auth.controller.js';
 import * as clientes   from '../controllers/clientes.controller.js';
 import * as productos  from '../controllers/productos.controller.js';
@@ -10,6 +10,7 @@ import * as ordenes    from '../controllers/ordenes.controller.js';
 import * as credito    from '../controllers/credito.controller.js';
 import * as reportes   from '../controllers/reportes.controller.js';
 import * as cotizaciones from '../controllers/cotizaciones.controller.js';
+import * as usuarios   from '../controllers/usuarios.controller.js';
 
 const r = Router();
 
@@ -72,5 +73,12 @@ r.post('/cotizaciones',                   authenticate, cotizaciones.crear);
 r.post('/cotizaciones/:id/convertir',     authenticate, cotizaciones.convertirAVenta);
 // Vista pública SIN autenticación — para compartir por WhatsApp/link directo
 r.get ('/cotizaciones/publica/:token',    cotizaciones.verPublica);
+
+// ── Usuarios (solo admin) ───────────────────────────
+r.get ('/usuarios',                       authenticate, authorize('admin'), usuarios.listar);
+r.get ('/usuarios/roles',                 authenticate, usuarios.roles);
+r.post('/usuarios',                       authenticate, authorize('admin'), usuarios.crear);
+r.put ('/usuarios/:id',                   authenticate, authorize('admin'), usuarios.actualizar);
+r.post('/usuarios/:id/reset-password',    authenticate, authorize('admin'), usuarios.resetPassword);
 
 export default r;
