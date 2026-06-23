@@ -82,6 +82,15 @@ export const api = {
   // Fotos de producto
   agregarFotoProducto: (productoId, data) =>
     fetch(`${BASE}/productos/${productoId}/fotos`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle),
+  subirFotoProducto: (productoId, archivo) => {
+    const form = new FormData();
+    form.append('foto', archivo);
+    return fetch(`${BASE}/productos/${productoId}/fotos/subir`, {
+      method: 'POST',
+      headers: getToken() ? { Authorization: `Bearer ${getToken()}` } : {}, // sin Content-Type: el navegador lo pone solo con el boundary correcto
+      body: form,
+    }).then(handle);
+  },
   eliminarFotoProducto: (fotoId) =>
     fetch(`${BASE}/productos/fotos/${fotoId}`, { method: 'DELETE', headers: headers() }).then(handle),
 

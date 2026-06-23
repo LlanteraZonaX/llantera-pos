@@ -1,4 +1,5 @@
 import { query, getClient } from '../config/db.js';
+import cloudinary from '../config/cloudinary.js';
 
 export const listar = async (req, res) => {
   try {
@@ -151,6 +152,52 @@ export const ajustarStock = async (req, res) => {
     res.status(500).json({ error: 'Error al ajustar stock' });
   } finally {
     client.release();
+  }
+};
+
+// Subir un archivo de imagen real (no una URL externa) — lo manda a Cloudinary
+// y guarda la URL estable que Cloudinary devuelve, evitando los problemas de
+// bloqueo/inestabilidad de servicios como Google Drive.
+export const subirFoto = async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No se recibió ningún archivo' });
+
+    const { rows: [prod] } = await query(
+      'SELECT id FROM productos WHERE id = $1 AND negocio_id = $2',
+      [req.params.id, req.user.negocio_id]
+    );
+    if (!prod) return res.status(404).json({ error: 'Producto no encontrado' });
+
+    const { rows: existentes } = await query(
+      'SELECT COUNT(*) FROM producto_fotos WHERE producto_id = $1', [req.params.id]
+    );
+    const esPrincipal = parseInt(existentes[0].count) === 0;
+
+    // Subimos el buffer del archivo directamente a Cloudinary (sin guardarlo en disco)
+    const resultado = await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        {
+          folder: `llantera/${req.user.negocio_id}/productos`,
+          resource_type: 'image',
+          transformation: [{ width: 1200, height: 1200, crop: 'limit', quality: 'auto' }],
+        },
+        (error, result) => (error ? reject(error) : resolve(result))
+      );
+      stream.end(req.file.buffer);
+    });
+
+    if (esPrincipal) {
+      await query('UPDATE producto_fotos SET es_principal = false WHERE producto_id = $1', [req.params.id]);
+    }
+
+    const { rows } = await query(
+      `INSERT INTO producto_fotos (producto_id, url, es_principal) VALUES ($1, $2, $3) RETURNING *`,
+      [req.params.id, resultado.secure_url, esPrincipal]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error('[subirFoto]', err.message);
+    res.status(500).json({ error: 'Error al subir la foto. Intenta de nuevo.' });
   }
 };
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import api from "./api";
 
 // ─── Utilidades ───────────────────────────────────────────────────────────────
@@ -436,11 +436,27 @@ function normalizarUrlFoto(url) {
 
 function ModalFotosProducto({ producto, onClose, onSaved }) {
   const [url, setUrl] = useState("");
+  const [mostrarUrl, setMostrarUrl] = useState(false);
   const [fotos, setFotos] = useState(producto.fotos || []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const fileInputRef = useRef(null);
 
-  const agregar = async () => {
+  const subirArchivo = async (e) => {
+    const archivo = e.target.files?.[0];
+    if (!archivo) return;
+    if (archivo.size > 5 * 1024 * 1024) { setError("La foto no debe pesar más de 5MB"); return; }
+    setLoading(true); setError("");
+    try {
+      const nueva = await api.subirFotoProducto(producto.id, archivo);
+      setFotos(p => [...p, nueva]);
+    } catch (e) { setError(e.message || "Error al subir la foto"); } finally {
+      setLoading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const agregarPorUrl = async () => {
     if (!url.trim()) return;
     setLoading(true); setError("");
     try {
@@ -463,13 +479,24 @@ function ModalFotosProducto({ producto, onClose, onSaved }) {
           <button onClick={() => { onSaved(); onClose(); }} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)" }}>✕</button>
         </div>
         {error && <div style={{ background: "#FEE2E2", color: "#B91C1C", borderRadius: 8, padding: "8px 12px", fontSize: 12, marginBottom: 12 }}>{error}</div>}
-        <p style={{ fontSize: 11, color: "var(--color-text-secondary)", marginBottom: 12 }}>
-          Pega la URL pública de una foto. Los links de Google Drive se convierten automáticamente al formato correcto — asegúrate de que el archivo esté compartido como <strong>"Cualquier persona con el enlace"</strong>, no solo con personas específicas. La primera foto se usa como principal para cotizaciones.
-        </p>
-        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-          <input style={{ ...inputStyle, flex: 1 }} placeholder="https://..." value={url} onChange={e => setUrl(e.target.value)} />
-          <button onClick={agregar} disabled={loading} style={{ padding: "8px 16px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Agregar</button>
-        </div>
+
+        <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={subirArchivo} style={{ display: "none" }} />
+        <button onClick={() => fileInputRef.current?.click()} disabled={loading}
+          style={{ width: "100%", padding: "14px", border: "2px dashed var(--color-border-secondary)", borderRadius: 10, background: "var(--color-background-secondary)", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", marginBottom: 8 }}>
+          {loading ? "Subiendo..." : "📤 Subir foto desde el celular o computadora"}
+        </button>
+
+        <button onClick={() => setMostrarUrl(v => !v)} style={{ background: "none", border: "none", color: "var(--color-text-secondary)", fontSize: 11, cursor: "pointer", marginBottom: 12, textDecoration: "underline" }}>
+          {mostrarUrl ? "Ocultar opción de enlace externo" : "¿Prefieres pegar un enlace en su lugar?"}
+        </button>
+
+        {mostrarUrl && (
+          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+            <input style={{ ...inputStyle, flex: 1 }} placeholder="https://..." value={url} onChange={e => setUrl(e.target.value)} />
+            <button onClick={agregarPorUrl} disabled={loading} style={{ padding: "8px 16px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Agregar</button>
+          </div>
+        )}
+
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
           {fotos.map(f => (
             <div key={f.id} style={{ position: "relative", borderRadius: 8, overflow: "hidden", border: f.es_principal ? "2px solid #1D4ED8" : "1px solid var(--color-border-secondary)", aspectRatio: "1" }}>

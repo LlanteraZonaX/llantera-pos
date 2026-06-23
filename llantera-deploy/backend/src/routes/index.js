@@ -3,6 +3,7 @@ import { authenticate, authorize } from '../middleware/auth.js';
 import { login, me, cambiarPassword } from '../controllers/auth.controller.js';
 import * as clientes   from '../controllers/clientes.controller.js';
 import * as productos  from '../controllers/productos.controller.js';
+import { uploadFoto } from '../middleware/upload.js';
 import * as compras    from '../controllers/compras.controller.js';
 import * as gastos     from '../controllers/gastos.controller.js';
 import * as ventas     from '../controllers/ventas.controller.js';
@@ -33,6 +34,12 @@ r.post('/productos',                      authenticate, productos.crear);
 r.put ('/productos/:id',                  authenticate, productos.actualizar);
 r.post('/productos/:id/stock',            authenticate, productos.ajustarStock);
 r.post('/productos/:id/fotos',            authenticate, productos.agregarFoto);
+r.post('/productos/:id/fotos/subir',      authenticate, (req, res, next) => {
+  uploadFoto(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message || 'Error al procesar el archivo' });
+    next();
+  });
+}, productos.subirFoto);
 r.delete('/productos/fotos/:fotoId',      authenticate, productos.eliminarFoto);
 
 // ── Compras ─────────────────────────────────────────
