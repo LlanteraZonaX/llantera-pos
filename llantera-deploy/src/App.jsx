@@ -33,8 +33,8 @@ function Login({ onLogin }) {
   };
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0F172A" }}>
-      <div style={{ background: "#1E293B", borderRadius: 16, padding: "40px 36px", width: 360, boxShadow: "0 20px 60px rgba(0,0,0,0.4)" }}>
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0F172A", padding: 16 }}>
+      <div style={{ background: "#1E293B", borderRadius: 16, padding: "40px 36px", width: "100%", maxWidth: 360, boxShadow: "0 20px 60px rgba(0,0,0,0.4)", boxSizing: "border-box" }}>
         <div style={{ textAlign: "center", marginBottom: 32 }}>
           <span style={{ fontSize: 40 }}>🚗</span>
           <h1 style={{ color: "#F1F5F9", fontSize: 22, fontWeight: 700, margin: "8px 0 4px" }}>Llantera POS</h1>
@@ -306,6 +306,7 @@ function ModalGasto({ onClose, onSaved }) {
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 function Dashboard({ setSeccion, onNuevaCompra, onNuevoGasto }) {
+  const isMobile = useIsMobile();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -325,7 +326,7 @@ function Dashboard({ setSeccion, onNuevaCompra, onNuevoGasto }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginBottom: 4 }}>
+      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginBottom: 4, flexWrap: "wrap" }}>
         <button onClick={onNuevaCompra} style={{ padding: "8px 16px", background: "var(--color-background-secondary)", border: "1px solid var(--color-border-secondary)", borderRadius: 9, cursor: "pointer", fontSize: 13 }}>🚚 Nueva compra</button>
         <button onClick={onNuevoGasto} style={{ padding: "8px 16px", background: "#0F766E", color: "#fff", border: "none", borderRadius: 9, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>+ Gasto</button>
         <button onClick={cargar} style={{ padding: "8px 12px", background: "var(--color-background-tertiary)", border: "1px solid var(--color-border-secondary)", borderRadius: 9, cursor: "pointer", fontSize: 13 }}>↻ Actualizar</button>
@@ -338,7 +339,7 @@ function Dashboard({ setSeccion, onNuevaCompra, onNuevoGasto }) {
         <KpiCard icono="📦" label="Stock bajo" valor={k.stock_bajo||0} sub="productos" color="#DC2626" alerta={(k.stock_bajo||0) > 0} />
         <KpiCard icono="💳" label="Cuentas × cobrar" valor={fmt(k.total_cxc)} sub={`${k.num_pendientes||0} clientes`} color="#92400E" />
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "2fr 1.2fr", gap: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1.2fr", gap: 16 }}>
         <Card titulo="Ventas — últimos 7 días">
           <BarChart data={semana.map((d, i) => ({ ...d, dia: i === semana.length-1 ? "Hoy" : ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"][new Date(d.dia).getDay()] }))} />
         </Card>
@@ -383,7 +384,7 @@ function Inventario({ onNuevoProducto }) {
         <button onClick={onNuevoProducto} style={{ padding: "8px 18px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>+ Nuevo producto</button>
       </div>
       {loading ? <div style={{ textAlign: "center", padding: 40, color: "var(--color-text-secondary)" }}>Cargando...</div> : (
-        <div style={{ background: "var(--color-background-secondary)", borderRadius: 12, border: "1px solid var(--color-border-tertiary)", overflow: "hidden" }}>
+        <div style={{ background: "var(--color-background-secondary)", borderRadius: 12, border: "1px solid var(--color-border-tertiary)", overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr style={{ background: "var(--color-background-tertiary)" }}>
@@ -678,7 +679,7 @@ function Usuarios() {
       </div>
 
       {loading ? <div style={{ textAlign: "center", padding: 40, color: "var(--color-text-secondary)" }}>Cargando...</div> : (
-        <div style={{ background: "var(--color-background-secondary)", borderRadius: 12, border: "1px solid var(--color-border-tertiary)", overflow: "hidden" }}>
+        <div style={{ background: "var(--color-background-secondary)", borderRadius: 12, border: "1px solid var(--color-border-tertiary)", overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr style={{ background: "var(--color-background-tertiary)" }}>
@@ -843,6 +844,7 @@ function ModalMiPassword({ onClose }) {
 }
 
 function Catalogo() {
+  const isMobile = useIsMobile();
   const [productos, setProductos] = useState([]);
   const [buscar, setBuscar] = useState("");
   const [loading, setLoading] = useState(true);
@@ -922,7 +924,7 @@ function Catalogo() {
   }
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 20, alignItems: "flex-start" }}>
+    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 340px", gap: 20, alignItems: "flex-start" }}>
       {/* Catálogo */}
       <div>
         <input style={{ ...inputStyle, marginBottom: 16 }} placeholder="Buscar producto, medida o marca..." value={buscar} onChange={e => setBuscar(e.target.value)} />
@@ -1066,6 +1068,17 @@ function CotizacionPublica({ token }) {
   );
 }
 
+// Detecta si el viewport actual es de tamaño móvil (se actualiza al rotar/resize)
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.innerWidth < breakpoint);
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < breakpoint);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [breakpoint]);
+  return isMobile;
+}
+
 // ─── App Principal ────────────────────────────────────────────────────────────
 function AppPrivada() {
   const [user, setUser] = useState(() => {
@@ -1073,7 +1086,9 @@ function AppPrivada() {
   });
   const [seccion, setSeccion] = useState("dashboard");
   const [modal, setModal] = useState(null);
-  const [sidebar, setSidebar] = useState(true);
+  const isMobile = useIsMobile();
+  const [sidebar, setSidebar] = useState(true);       // colapsar/expandir en DESKTOP
+  const [menuAbierto, setMenuAbierto] = useState(false); // abrir/cerrar drawer en MOVIL
   const [productos, setProductos] = useState([]);
 
   useEffect(() => {
@@ -1094,50 +1109,82 @@ function AppPrivada() {
   // Si la sección activa ya no es visible para este usuario (ej. cambio de rol), saltar a la primera permitida.
   const seccionActiva = navVisible.find(n => n.id === seccion) ? seccion : (navVisible[0]?.id || "dashboard");
   const titulo = navVisible.find(n => n.id === seccionActiva)?.label || seccionActiva;
+  const irASeccion = (id) => { setSeccion(id); setMenuAbierto(false); };
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", fontFamily: "var(--font-sans, system-ui)", color: "var(--color-text-primary)", background: "var(--color-background-tertiary)" }}>
-      {/* Sidebar */}
-      <aside style={{ width: sidebar ? 220 : 56, background: "#0F172A", flexShrink: 0, transition: "width 0.25s", display: "flex", flexDirection: "column", minHeight: "100vh" }}>
-        <div style={{ padding: sidebar ? "20px 16px 12px" : "20px 8px 12px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", gap: 10 }}>
+
+      {/* Overlay oscuro detrás del menú, solo visible en móvil cuando el menú está abierto */}
+      {isMobile && menuAbierto && (
+        <div onClick={() => setMenuAbierto(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 40 }} />
+      )}
+
+      {/* Sidebar: fijo en desktop, drawer deslizante en móvil */}
+      <aside style={{
+        width: isMobile ? 240 : (sidebar ? 220 : 56),
+        background: "#0F172A",
+        flexShrink: 0,
+        transition: isMobile ? "transform 0.25s" : "width 0.25s",
+        display: "flex",
+        flexDirection: "column",
+        minHeight: "100vh",
+        ...(isMobile ? {
+          position: "fixed", top: 0, left: 0, height: "100vh", zIndex: 50,
+          transform: menuAbierto ? "translateX(0)" : "translateX(-100%)",
+        } : {}),
+      }}>
+        <div style={{ padding: (sidebar || isMobile) ? "20px 16px 12px" : "20px 8px 12px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 22, flexShrink: 0 }}>🚗</span>
-          {sidebar && <span style={{ color: "#fff", fontWeight: 700, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden" }}>{user.negocio?.nombre || "Llantera POS"}</span>}
-          <button onClick={() => setSidebar(!sidebar)} style={{ marginLeft: "auto", background: "none", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: 16, padding: 2 }}>{sidebar ? "◂" : "▸"}</button>
+          {(sidebar || isMobile) && <span style={{ color: "#fff", fontWeight: 700, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden" }}>{user.negocio?.nombre || "Llantera POS"}</span>}
+          {isMobile
+            ? <button onClick={() => setMenuAbierto(false)} style={{ marginLeft: "auto", background: "none", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: 18, padding: 2 }}>✕</button>
+            : <button onClick={() => setSidebar(!sidebar)} style={{ marginLeft: "auto", background: "none", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: 16, padding: 2 }}>{sidebar ? "◂" : "▸"}</button>}
         </div>
-        <nav style={{ flex: 1, padding: "10px 0" }}>
+        <nav style={{ flex: 1, padding: "10px 0", overflowY: "auto" }}>
           {navVisible.map(item => (
-            <button key={item.id} onClick={() => setSeccion(item.id)}
-              style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: sidebar ? "10px 16px" : "10px 0", justifyContent: sidebar ? "flex-start" : "center", background: seccionActiva === item.id ? "rgba(29,78,216,0.35)" : "none", borderLeft: seccionActiva === item.id ? "3px solid #60A5FA" : "3px solid transparent", border: "none", cursor: "pointer", color: seccionActiva === item.id ? "#fff" : "rgba(255,255,255,0.55)", fontSize: 13, fontWeight: seccionActiva === item.id ? 600 : 400, transition: "all 0.15s", textAlign: "left" }}>
-              <span style={{ fontSize: 16, flexShrink: 0 }}>{item.icon}</span>
-              {sidebar && <span style={{ whiteSpace: "nowrap" }}>{item.label}</span>}
+            <button key={item.id} onClick={() => irASeccion(item.id)}
+              style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: (sidebar || isMobile) ? "12px 16px" : "10px 0", justifyContent: (sidebar || isMobile) ? "flex-start" : "center", background: seccionActiva === item.id ? "rgba(29,78,216,0.35)" : "none", borderLeft: seccionActiva === item.id ? "3px solid #60A5FA" : "3px solid transparent", border: "none", cursor: "pointer", color: seccionActiva === item.id ? "#fff" : "rgba(255,255,255,0.55)", fontSize: 14, fontWeight: seccionActiva === item.id ? 600 : 400, transition: "all 0.15s", textAlign: "left" }}>
+              <span style={{ fontSize: 17, flexShrink: 0 }}>{item.icon}</span>
+              {(sidebar || isMobile) && <span style={{ whiteSpace: "nowrap" }}>{item.label}</span>}
             </button>
           ))}
         </nav>
-        <div style={{ padding: sidebar ? "12px 16px" : "12px 8px", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+        <div style={{ padding: (sidebar || isMobile) ? "12px 16px" : "12px 8px", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#1D4ED8", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 13, flexShrink: 0 }}>
               {user.nombre?.[0]?.toUpperCase() || "U"}
             </div>
-            {sidebar && (
+            {(sidebar || isMobile) && (
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ color: "#fff", fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.nombre}</div>
                 <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 11 }}>{user.rol}</div>
               </div>
             )}
-            {sidebar && <button onClick={() => setModal("miPassword")} title="Cambiar mi contraseña" style={{ background: "none", border: "none", color: "rgba(255,255,255,0.3)", cursor: "pointer", fontSize: 13, marginRight: 2 }}>🔑</button>}
-            {sidebar && <button onClick={logout} title="Cerrar sesión" style={{ background: "none", border: "none", color: "rgba(255,255,255,0.3)", cursor: "pointer", fontSize: 14 }}>⏻</button>}
+            {(sidebar || isMobile) && <button onClick={() => setModal("miPassword")} title="Cambiar mi contraseña" style={{ background: "none", border: "none", color: "rgba(255,255,255,0.3)", cursor: "pointer", fontSize: 13, marginRight: 2 }}>🔑</button>}
+            {(sidebar || isMobile) && <button onClick={logout} title="Cerrar sesión" style={{ background: "none", border: "none", color: "rgba(255,255,255,0.3)", cursor: "pointer", fontSize: 14 }}>⏻</button>}
           </div>
         </div>
       </aside>
 
       {/* Contenido */}
-      <main style={{ flex: 1, padding: "24px 28px", overflowY: "auto" }}>
-        <div style={{ marginBottom: 24 }}>
-          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>{titulo}</h1>
-          <p style={{ margin: "2px 0 0", color: "var(--color-text-secondary)", fontSize: 13 }}>
-            {new Date().toLocaleDateString("es-MX", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
-          </p>
-        </div>
+      <main style={{ flex: 1, padding: isMobile ? "16px" : "24px 28px", overflowY: "auto", minWidth: 0, width: "100%" }}>
+        {/* Barra superior solo en móvil: botón hamburguesa + título */}
+        {isMobile && (
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+            <button onClick={() => setMenuAbierto(true)} style={{ background: "var(--color-background-secondary)", border: "1px solid var(--color-border-tertiary)", borderRadius: 8, width: 38, height: 38, fontSize: 18, cursor: "pointer", flexShrink: 0 }}>☰</button>
+            <div style={{ minWidth: 0 }}>
+              <h1 style={{ margin: 0, fontSize: 17, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{titulo}</h1>
+            </div>
+          </div>
+        )}
+        {!isMobile && (
+          <div style={{ marginBottom: 24 }}>
+            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>{titulo}</h1>
+            <p style={{ margin: "2px 0 0", color: "var(--color-text-secondary)", fontSize: 13 }}>
+              {new Date().toLocaleDateString("es-MX", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+            </p>
+          </div>
+        )}
 
         {seccionActiva === "dashboard"   && <Dashboard setSeccion={setSeccion} onNuevaCompra={() => setModal("compra")} onNuevoGasto={() => setModal("gasto")} />}
         {seccionActiva === "catalogo"    && <Catalogo />}
