@@ -997,10 +997,9 @@ const NAV = [
 ];
 
 const puedeVer = (permisos, clave) => {
-  if (!permisos) return true;
+  if (!permisos) return true; // sin objeto de permisos en absoluto: compatibilidad total (no debería pasar en la práctica)
   if (permisos.todo) return true;
-  if (clave in permisos) return !!permisos[clave];
-  return true;
+  return !!permisos[clave]; // si la clave no está declarada, se deniega (negar por defecto es lo seguro)
 };
 
 // ─── Vista pública de cotización (sin login, abierta desde WhatsApp) ──────────
