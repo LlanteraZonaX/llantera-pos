@@ -20,6 +20,8 @@ export const api = {
     fetch(`${BASE}/auth/login`, { method: 'POST', headers: headers(), body: JSON.stringify({ email, password }) }).then(handle),
   me: () =>
     fetch(`${BASE}/auth/me`, { headers: headers() }).then(handle),
+  cambiarPassword: (password_actual, password_nuevo) =>
+    fetch(`${BASE}/auth/cambiar-password`, { method: 'POST', headers: headers(), body: JSON.stringify({ password_actual, password_nuevo }) }).then(handle),
 
   // Dashboard
   dashboard: () =>

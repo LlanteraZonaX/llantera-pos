@@ -799,6 +799,49 @@ function ModalResetPassword({ usuario, onClose, onSaved }) {
 }
 
 
+function ModalMiPassword({ onClose }) {
+  const [actual, setActual] = useState("");
+  const [nueva, setNueva] = useState("");
+  const [error, setError] = useState("");
+  const [ok, setOk] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError(""); setLoading(true);
+    try {
+      await api.cambiarPassword(actual, nueva);
+      setOk(true);
+    } catch (err) { setError(err.message || "Error al cambiar contraseña"); } finally { setLoading(false); }
+  };
+
+  return (
+    <div style={overlayStyle}>
+      <div style={{ ...modalBase, maxWidth: 360 }}>
+        <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 600 }}>🔑 Cambiar mi contraseña</h2>
+        {ok ? (
+          <div>
+            <div style={{ background: "#D1FAE5", color: "#065F46", borderRadius: 8, padding: "10px 12px", fontSize: 13, marginBottom: 16 }}>Contraseña actualizada correctamente.</div>
+            <button onClick={onClose} style={{ width: "100%", padding: "9px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Cerrar</button>
+          </div>
+        ) : (
+          <form onSubmit={submit}>
+            {error && <div style={{ background: "#FEE2E2", color: "#B91C1C", borderRadius: 8, padding: "8px 12px", fontSize: 12, marginBottom: 12 }}>{error}</div>}
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <input style={inputStyle} type="password" placeholder="Contraseña actual" required value={actual} onChange={e => setActual(e.target.value)} autoFocus />
+              <input style={inputStyle} type="password" placeholder="Nueva contraseña (mínimo 6 caracteres)" required minLength={6} value={nueva} onChange={e => setNueva(e.target.value)} />
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+              <button type="button" onClick={onClose} style={{ flex: 1, padding: "9px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
+              <button type="submit" disabled={loading} style={{ flex: 1, padding: "9px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>{loading ? "Guardando..." : "Cambiar"}</button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function Catalogo() {
   const [productos, setProductos] = useState([]);
   const [buscar, setBuscar] = useState("");
@@ -1082,6 +1125,7 @@ function AppPrivada() {
                 <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 11 }}>{user.rol}</div>
               </div>
             )}
+            {sidebar && <button onClick={() => setModal("miPassword")} title="Cambiar mi contraseña" style={{ background: "none", border: "none", color: "rgba(255,255,255,0.3)", cursor: "pointer", fontSize: 13, marginRight: 2 }}>🔑</button>}
             {sidebar && <button onClick={logout} title="Cerrar sesión" style={{ background: "none", border: "none", color: "rgba(255,255,255,0.3)", cursor: "pointer", fontSize: 14 }}>⏻</button>}
           </div>
         </div>
@@ -1110,6 +1154,7 @@ function AppPrivada() {
       {modal === "producto" && <ModalProducto onClose={() => setModal(null)} onSaved={() => { setModal(null); if (seccion === "inventario") setSeccion("inventario"); api.productos().then(r => setProductos(r.data||[])); }} />}
       {modal === "compra"   && <ModalCompra onClose={() => setModal(null)} onSaved={() => { setModal(null); }} productos={productos} />}
       {modal === "gasto"    && <ModalGasto onClose={() => setModal(null)} onSaved={() => { setModal(null); if (seccion === "gastos") setSeccion("gastos"); }} />}
+      {modal === "miPassword" && <ModalMiPassword onClose={() => setModal(null)} />}
     </div>
   );
 }
