@@ -11,10 +11,12 @@ export const login = async (req, res) => {
       return res.status(400).json({ error: 'Email y contraseña requeridos' });
 
     const { rows } = await query(
-      `SELECT u.id, u.nombre, u.email, u.password_hash, u.activo,
-              r.nombre as rol, r.permisos
-       FROM usuarios u JOIN roles r ON u.rol_id = r.id
-       WHERE u.email = $1`,
+      `SELECT u.id, u.nombre, u.email, u.password_hash, u.activo, u.negocio_id,
+              r.nombre as rol, r.permisos, n.nombre as negocio_nombre, n.slug as negocio_slug
+       FROM usuarios u
+       JOIN roles r ON u.rol_id = r.id
+       JOIN negocios n ON u.negocio_id = n.id
+       WHERE u.email = $1 AND n.activo = true`,
       [email.toLowerCase().trim()]
     );
 
@@ -26,14 +28,27 @@ export const login = async (req, res) => {
     if (!valid) return res.status(401).json({ error: 'Credenciales inválidas' });
 
     const token = jwt.sign(
-      { id: user.id, nombre: user.nombre, rol: user.rol, permisos: user.permisos },
+      {
+        id: user.id,
+        nombre: user.nombre,
+        rol: user.rol,
+        permisos: user.permisos,
+        negocio_id: user.negocio_id,
+        negocio_slug: user.negocio_slug,
+      },
       SECRET,
       { expiresIn: '12h' }
     );
 
     res.json({
       token,
-      user: { id: user.id, nombre: user.nombre, email: user.email, rol: user.rol }
+      user: {
+        id: user.id,
+        nombre: user.nombre,
+        email: user.email,
+        rol: user.rol,
+        negocio: { id: user.negocio_id, nombre: user.negocio_nombre, slug: user.negocio_slug },
+      },
     });
   } catch (err) {
     console.error('[auth.login]', err.message);

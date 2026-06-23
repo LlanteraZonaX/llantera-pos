@@ -1,9 +1,9 @@
 import { query, getClient } from '../config/db.js';
 
-const generarFolio = async (client) => {
+const generarFolio = async (client, negocio_id) => {
   const año = new Date().getFullYear();
   const { rows } = await client.query(
-    `SELECT COUNT(*) FROM compras WHERE EXTRACT(YEAR FROM created_at) = $1`, [año]
+    `SELECT COUNT(*) FROM compras WHERE EXTRACT(YEAR FROM created_at) = $1 AND negocio_id = $2`, [año, negocio_id]
   );
   const num = String(parseInt(rows[0].count) + 1).padStart(5, '0');
   return `CMP-${año}-${num}`;
@@ -12,8 +12,9 @@ const generarFolio = async (client) => {
 export const listar = async (req, res) => {
   try {
     const { desde, hasta, proveedor_id, limit = 20, offset = 0 } = req.query;
-    let where = ['1=1'];
-    const params = [];
+    const negocio_id = req.user.negocio_id;
+    let where = ['c.negocio_id = $1'];
+    const params = [negocio_id];
 
     if (desde) { params.push(desde); where.push(`c.fecha_recepcion >= $${params.length}`); }
     if (hasta) { params.push(hasta); where.push(`c.fecha_recepcion <= $${params.length}`); }
@@ -44,7 +45,7 @@ export const obtener = async (req, res) => {
     const { rows: [compra] } = await query(
       `SELECT c.*, p.nombre as proveedor_nombre
        FROM compras c LEFT JOIN proveedores p ON c.proveedor_id = p.id
-       WHERE c.id = $1`, [req.params.id]
+       WHERE c.id = $1 AND c.negocio_id = $2`, [req.params.id, req.user.negocio_id]
     );
     if (!compra) return res.status(404).json({ error: 'Compra no encontrada' });
 
@@ -66,12 +67,12 @@ export const crear = async (req, res) => {
   const client = await getClient();
   try {
     await client.query('BEGIN');
+    const negocio_id = req.user.negocio_id;
 
     const { proveedor_id, fecha_recepcion, fecha_factura, num_factura, notas, items } = req.body;
 
     if (!items?.length) return res.status(400).json({ error: 'La compra debe tener al menos un producto' });
 
-    // Calcular totales
     let subtotal = 0;
     for (const item of items) {
       if (!item.producto_id || !item.cantidad || !item.costo_unitario)
@@ -80,23 +81,20 @@ export const crear = async (req, res) => {
     }
     const iva = subtotal * 0.16;
     const total = subtotal + iva;
-    const folio = await generarFolio(client);
+    const folio = await generarFolio(client, negocio_id);
 
-    // Insertar cabecera
     const { rows: [compra] } = await client.query(
       `INSERT INTO compras (folio, proveedor_id, usuario_id, fecha_recepcion, fecha_factura,
-         num_factura, subtotal, iva, total, notas)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+         num_factura, subtotal, iva, total, notas, negocio_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
       [folio, proveedor_id, req.user.id, fecha_recepcion || new Date(),
-       fecha_factura, num_factura, subtotal, iva, total, notas]
+       fecha_factura, num_factura, subtotal, iva, total, notas, negocio_id]
     );
 
-    // Insertar partidas y actualizar stock
     for (const item of items) {
-      // Obtener datos del producto para desnormalizar
       const { rows: [prod] } = await client.query(
-        'SELECT id, nombre, medida, stock_actual FROM productos WHERE id = $1 FOR UPDATE',
-        [item.producto_id]
+        'SELECT id, nombre, medida, stock_actual FROM productos WHERE id = $1 AND negocio_id = $2 FOR UPDATE',
+        [item.producto_id, negocio_id]
       );
       if (!prod) throw new Error(`Producto ${item.producto_id} no encontrado`);
 
@@ -106,7 +104,6 @@ export const crear = async (req, res) => {
         [compra.id, prod.id, prod.medida, prod.nombre, item.cantidad, item.costo_unitario]
       );
 
-      // Actualizar stock y registrar movimiento
       const stock_despues = prod.stock_actual + item.cantidad;
       await client.query(
         'UPDATE productos SET stock_actual = $1, precio_compra = $2, updated_at = NOW() WHERE id = $3',
@@ -114,9 +111,9 @@ export const crear = async (req, res) => {
       );
       await client.query(
         `INSERT INTO movimientos_inventario
-           (producto_id, tipo, cantidad, stock_antes, stock_despues, referencia_tipo, referencia_id, usuario_id, notas)
-         VALUES ($1,'entrada',$2,$3,$4,'compra',$5,$6,$7)`,
-        [prod.id, item.cantidad, prod.stock_actual, stock_despues, compra.id, req.user.id, `Compra ${folio}`]
+           (producto_id, tipo, cantidad, stock_antes, stock_despues, referencia_tipo, referencia_id, usuario_id, notas, negocio_id)
+         VALUES ($1,'entrada',$2,$3,$4,'compra',$5,$6,$7,$8)`,
+        [prod.id, item.cantidad, prod.stock_actual, stock_despues, compra.id, req.user.id, `Compra ${folio}`, negocio_id]
       );
     }
 

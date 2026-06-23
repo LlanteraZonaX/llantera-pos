@@ -1,9 +1,9 @@
 import { query, getClient } from '../config/db.js';
 
-const generarFolio = async (client) => {
+const generarFolio = async (client, negocio_id) => {
   const año = new Date().getFullYear();
   const { rows } = await client.query(
-    `SELECT COUNT(*) FROM ordenes_servicio WHERE EXTRACT(YEAR FROM created_at)=$1`, [año]
+    `SELECT COUNT(*) FROM ordenes_servicio WHERE EXTRACT(YEAR FROM created_at)=$1 AND negocio_id=$2`, [año, negocio_id]
   );
   return `ORD-${año}-${String(parseInt(rows[0].count)+1).padStart(5,'0')}`;
 };
@@ -11,8 +11,9 @@ const generarFolio = async (client) => {
 export const listar = async (req, res) => {
   try {
     const { estado, fecha, limit=30, offset=0 } = req.query;
-    let where = ['1=1'];
-    const params = [];
+    const negocio_id = req.user.negocio_id;
+    let where = ['os.negocio_id=$1'];
+    const params = [negocio_id];
     if (estado) { params.push(estado); where.push(`os.estado=$${params.length}`); }
     if (fecha)  { params.push(fecha);  where.push(`DATE(os.fecha_ingreso)=$${params.length}`); }
 
@@ -37,6 +38,7 @@ export const listar = async (req, res) => {
 
 export const obtener = async (req, res) => {
   try {
+    const negocio_id = req.user.negocio_id;
     const { rows: [orden] } = await query(
       `SELECT os.*, c.nombre as cliente_nombre, c.telefono,
               v.placa, v.marca, v.modelo, v.anio, v.color,
@@ -46,7 +48,7 @@ export const obtener = async (req, res) => {
        LEFT JOIN vehiculos v ON os.vehiculo_id=v.id
        LEFT JOIN usuarios u ON os.tecnico_id=u.id
        LEFT JOIN usuarios u2 ON os.cajero_id=u2.id
-       WHERE os.id=$1`, [req.params.id]
+       WHERE os.id=$1 AND os.negocio_id=$2`, [req.params.id, negocio_id]
     );
     if (!orden) return res.status(404).json({ error: 'Orden no encontrada' });
     const { rows: detalle } = await query(
@@ -66,6 +68,7 @@ export const crear = async (req, res) => {
   const client = await getClient();
   try {
     await client.query('BEGIN');
+    const negocio_id = req.user.negocio_id;
     const { cliente_id, vehiculo_id, tecnico_id, km_vehiculo, observaciones, items, fecha_estimada } = req.body;
     if (!items?.length) throw new Error('La orden debe tener al menos un servicio o producto');
 
@@ -75,15 +78,15 @@ export const crear = async (req, res) => {
       subtotal += (parseFloat(item.cantidad)||1) * precio - (parseFloat(item.descuento)||0);
     }
     const total = subtotal;
-    const folio = await generarFolio(client);
+    const folio = await generarFolio(client, negocio_id);
 
     const { rows: [orden] } = await client.query(
       `INSERT INTO ordenes_servicio
          (folio,cliente_id,vehiculo_id,tecnico_id,cajero_id,km_vehiculo,
-          observaciones,subtotal,total,fecha_estimada)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+          observaciones,subtotal,total,fecha_estimada,negocio_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
       [folio,cliente_id,vehiculo_id,tecnico_id,req.user.id,km_vehiculo,
-       observaciones,subtotal,total,fecha_estimada||null]
+       observaciones,subtotal,total,fecha_estimada||null,negocio_id]
     );
 
     for (const item of items) {
@@ -111,12 +114,13 @@ export const cambiarEstado = async (req, res) => {
     if (!estados.includes(estado))
       return res.status(400).json({ error: `Estado inválido. Válidos: ${estados.join(', ')}` });
 
+    const negocio_id = req.user.negocio_id;
     const extra = estado === 'entregado' ? ', fecha_entrega=NOW(), pagado=true' : '';
     const { rows } = await query(
       `UPDATE ordenes_servicio
-       SET estado=$1 ${tecnico_id ? ',tecnico_id=$3' : ''} ${extra}, updated_at=NOW()
-       WHERE id=$2 RETURNING *`,
-      tecnico_id ? [estado, req.params.id, tecnico_id] : [estado, req.params.id]
+       SET estado=$1 ${tecnico_id ? ',tecnico_id=$4' : ''} ${extra}, updated_at=NOW()
+       WHERE id=$2 AND negocio_id=$3 RETURNING *`,
+      tecnico_id ? [estado, req.params.id, negocio_id, tecnico_id] : [estado, req.params.id, negocio_id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Orden no encontrada' });
     res.json(rows[0]);

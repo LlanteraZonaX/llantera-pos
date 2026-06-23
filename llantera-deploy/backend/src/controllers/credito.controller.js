@@ -3,8 +3,9 @@ import { query, getClient } from '../config/db.js';
 export const listar = async (req, res) => {
   try {
     const { estado, cliente_id, limit=50, offset=0 } = req.query;
-    let where = ['1=1'];
-    const params = [];
+    const negocio_id = req.user.negocio_id;
+    let where = ['cc.negocio_id=$1'];
+    const params = [negocio_id];
     if (estado)     { params.push(estado);     where.push(`cc.estado=$${params.length}`); }
     if (cliente_id) { params.push(cliente_id); where.push(`cc.cliente_id=$${params.length}`); }
 
@@ -32,11 +33,12 @@ export const registrarPago = async (req, res) => {
   const client = await getClient();
   try {
     await client.query('BEGIN');
+    const negocio_id = req.user.negocio_id;
     const { monto, metodo_pago='efectivo', referencia, notas } = req.body;
     if (!monto || monto <= 0) return res.status(400).json({ error: 'Monto inválido' });
 
     const { rows: [cuenta] } = await client.query(
-      'SELECT * FROM cuentas_cobrar WHERE id=$1 FOR UPDATE', [req.params.id]
+      'SELECT * FROM cuentas_cobrar WHERE id=$1 AND negocio_id=$2 FOR UPDATE', [req.params.id, negocio_id]
     );
     if (!cuenta) return res.status(404).json({ error: 'Cuenta no encontrada' });
     if (cuenta.estado === 'pagada') return res.status(400).json({ error: 'Esta cuenta ya está pagada' });
@@ -54,8 +56,8 @@ export const registrarPago = async (req, res) => {
       [nuevo_pagado, nuevo_estado, cuenta.id]
     );
     await client.query(
-      'UPDATE clientes SET saldo_pendiente=GREATEST(0, saldo_pendiente-$1) WHERE id=$2',
-      [monto, cuenta.cliente_id]
+      'UPDATE clientes SET saldo_pendiente=GREATEST(0, saldo_pendiente-$1) WHERE id=$2 AND negocio_id=$3',
+      [monto, cuenta.cliente_id, negocio_id]
     );
 
     await client.query('COMMIT');

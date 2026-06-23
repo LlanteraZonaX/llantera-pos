@@ -9,6 +9,7 @@ import * as ventas     from '../controllers/ventas.controller.js';
 import * as ordenes    from '../controllers/ordenes.controller.js';
 import * as credito    from '../controllers/credito.controller.js';
 import * as reportes   from '../controllers/reportes.controller.js';
+import * as cotizaciones from '../controllers/cotizaciones.controller.js';
 
 const r = Router();
 
@@ -30,6 +31,8 @@ r.get ('/productos/:id',                  authenticate, productos.obtener);
 r.post('/productos',                      authenticate, productos.crear);
 r.put ('/productos/:id',                  authenticate, productos.actualizar);
 r.post('/productos/:id/stock',            authenticate, productos.ajustarStock);
+r.post('/productos/:id/fotos',            authenticate, productos.agregarFoto);
+r.delete('/productos/fotos/:fotoId',      authenticate, productos.eliminarFoto);
 
 // ── Compras ─────────────────────────────────────────
 r.get ('/compras',                        authenticate, compras.listar);
@@ -62,5 +65,12 @@ r.post('/credito/:id/pago',               authenticate, credito.registrarPago);
 r.get ('/reportes/dashboard',             authenticate, reportes.dashboard);
 r.get ('/reportes/ventas',                authenticate, reportes.ventasPorPeriodo);
 r.get ('/reportes/utilidad',              authenticate, reportes.utilidadBruta);
+
+// ── Cotizaciones (vendedores) ───────────────────────
+r.get ('/cotizaciones',                   authenticate, cotizaciones.listar);
+r.post('/cotizaciones',                   authenticate, cotizaciones.crear);
+r.post('/cotizaciones/:id/convertir',     authenticate, cotizaciones.convertirAVenta);
+// Vista pública SIN autenticación — para compartir por WhatsApp/link directo
+r.get ('/cotizaciones/publica/:token',    cotizaciones.verPublica);
 
 export default r;

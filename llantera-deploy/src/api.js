@@ -76,6 +76,23 @@ export const api = {
     fetch(`${BASE}/credito?${params}`, { headers: headers() }).then(handle),
   registrarPago: (id, data) =>
     fetch(`${BASE}/credito/${id}/pago`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle),
+
+  // Fotos de producto
+  agregarFotoProducto: (productoId, data) =>
+    fetch(`${BASE}/productos/${productoId}/fotos`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle),
+  eliminarFotoProducto: (fotoId) =>
+    fetch(`${BASE}/productos/fotos/${fotoId}`, { method: 'DELETE', headers: headers() }).then(handle),
+
+  // Cotizaciones (vendedores)
+  cotizaciones: () =>
+    fetch(`${BASE}/cotizaciones`, { headers: headers() }).then(handle),
+  crearCotizacion: (data) =>
+    fetch(`${BASE}/cotizaciones`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle),
+  convertirCotizacionAVenta: (id) =>
+    fetch(`${BASE}/cotizaciones/${id}/convertir`, { method: 'POST', headers: headers() }).then(handle),
+  // Esta SÍ es pública, no requiere headers de auth (la usa el cliente final)
+  verCotizacionPublica: (token) =>
+    fetch(`${BASE}/cotizaciones/publica/${token}`).then(handle),
 };
 
 export default api;

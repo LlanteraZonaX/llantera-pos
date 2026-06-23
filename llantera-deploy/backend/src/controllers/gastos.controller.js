@@ -3,8 +3,9 @@ import { query } from '../config/db.js';
 export const listar = async (req, res) => {
   try {
     const { desde, hasta, categoria_id, limit = 50, offset = 0 } = req.query;
-    let where = ['1=1'];
-    const params = [];
+    const negocio_id = req.user.negocio_id;
+    let where = ['g.negocio_id = $1'];
+    const params = [negocio_id];
 
     if (desde) { params.push(desde); where.push(`g.fecha >= $${params.length}`); }
     if (hasta) { params.push(hasta); where.push(`g.fecha <= $${params.length}`); }
@@ -23,7 +24,6 @@ export const listar = async (req, res) => {
       [...params, limit, offset]
     );
 
-    // Totales del período
     const { rows: [totales] } = await query(
       `SELECT COALESCE(SUM(g.monto),0) as total,
               COUNT(*) as cantidad
@@ -46,10 +46,10 @@ export const crear = async (req, res) => {
       return res.status(400).json({ error: 'Categoría, descripción y monto son requeridos' });
 
     const { rows: [gasto] } = await query(
-      `INSERT INTO gastos (categoria_id, usuario_id, descripcion, monto, fecha, metodo_pago, proveedor_id, notas)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      `INSERT INTO gastos (categoria_id, usuario_id, descripcion, monto, fecha, metodo_pago, proveedor_id, notas, negocio_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
       [categoria_id, req.user.id, descripcion, monto, fecha || new Date(),
-       metodo_pago || 'efectivo', proveedor_id || null, notas]
+       metodo_pago || 'efectivo', proveedor_id || null, notas, req.user.negocio_id]
     );
     res.status(201).json(gasto);
   } catch (err) {
@@ -63,8 +63,8 @@ export const actualizar = async (req, res) => {
     const { categoria_id, descripcion, monto, fecha, metodo_pago, notas } = req.body;
     const { rows } = await query(
       `UPDATE gastos SET categoria_id=$1, descripcion=$2, monto=$3, fecha=$4,
-         metodo_pago=$5, notas=$6 WHERE id=$7 RETURNING *`,
-      [categoria_id, descripcion, monto, fecha, metodo_pago, notas, req.params.id]
+         metodo_pago=$5, notas=$6 WHERE id=$7 AND negocio_id=$8 RETURNING *`,
+      [categoria_id, descripcion, monto, fecha, metodo_pago, notas, req.params.id, req.user.negocio_id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Gasto no encontrado' });
     res.json(rows[0]);
@@ -75,7 +75,10 @@ export const actualizar = async (req, res) => {
 
 export const eliminar = async (req, res) => {
   try {
-    const { rows } = await query('DELETE FROM gastos WHERE id=$1 RETURNING id', [req.params.id]);
+    const { rows } = await query(
+      'DELETE FROM gastos WHERE id=$1 AND negocio_id=$2 RETURNING id',
+      [req.params.id, req.user.negocio_id]
+    );
     if (!rows.length) return res.status(404).json({ error: 'Gasto no encontrado' });
     res.json({ mensaje: 'Gasto eliminado' });
   } catch (err) {
@@ -86,8 +89,9 @@ export const eliminar = async (req, res) => {
 export const resumenPorCategoria = async (req, res) => {
   try {
     const { desde, hasta } = req.query;
-    let where = ['1=1'];
-    const params = [];
+    const negocio_id = req.user.negocio_id;
+    let where = ['g.negocio_id = $1'];
+    const params = [negocio_id];
     if (desde) { params.push(desde); where.push(`g.fecha >= $${params.length}`); }
     if (hasta) { params.push(hasta); where.push(`g.fecha <= $${params.length}`); }
 

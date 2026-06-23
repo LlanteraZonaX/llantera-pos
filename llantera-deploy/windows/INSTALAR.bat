@@ -66,6 +66,16 @@ echo  [3/6] Configurando variables de entorno del backend...
 :: ─── Pedir datos de configuración ──────────────────────────────
 echo.
 echo  ┌─────────────────────────────────────────────┐
+echo  │  Datos del negocio                          │
+echo  └─────────────────────────────────────────────┘
+set /p NEGOCIO_NOMBRE="  Nombre del negocio (ej. Llantera Perez): "
+if "%NEGOCIO_NOMBRE%"=="" set NEGOCIO_NOMBRE=Mi Llantera
+
+set /p NEGOCIO_SLUG="  Identificador corto sin espacios (ej. llantera-perez): "
+if "%NEGOCIO_SLUG%"=="" set NEGOCIO_SLUG=mi-llantera
+
+echo.
+echo  ┌─────────────────────────────────────────────┐
 echo  │  Configuración de la base de datos          │
 echo  └─────────────────────────────────────────────┘
 set /p DB_HOST="  Host PostgreSQL [localhost]: "
@@ -108,6 +118,8 @@ echo JWT_SECRET=%JWT_SECRET%>> ..\backend\.env
 echo FRONTEND_URL=http://localhost:5173>> ..\backend\.env
 echo ADMIN_EMAIL=%ADMIN_EMAIL%>> ..\backend\.env
 echo ADMIN_PASSWORD=%ADMIN_PASS%>> ..\backend\.env
+echo NEGOCIO_NOMBRE=%NEGOCIO_NOMBRE%>> ..\backend\.env
+echo NEGOCIO_SLUG=%NEGOCIO_SLUG%>> ..\backend\.env
 
 echo  [OK] Archivo .env creado
 

@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
-    "setup": "node src/scripts/setup-db.js"
+    "setup": "node src/scripts/setup-db.js",
+    "migrate": "node src/scripts/migrate.js"
   },
   "dependencies": {
     "express": "^4.19.2",
