@@ -1160,8 +1160,8 @@ function AppPrivada() {
                 <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 11 }}>{user.rol}</div>
               </div>
             )}
-            {(sidebar || isMobile) && <button onClick={() => setModal("miPassword")} title="Cambiar mi contraseña" style={{ background: "none", border: "none", color: "rgba(255,255,255,0.3)", cursor: "pointer", fontSize: 13, marginRight: 2 }}>🔑</button>}
-            {(sidebar || isMobile) && <button onClick={logout} title="Cerrar sesión" style={{ background: "none", border: "none", color: "rgba(255,255,255,0.3)", cursor: "pointer", fontSize: 14 }}>⏻</button>}
+            {(sidebar || isMobile) && <button onClick={() => setModal("miPassword")} title="Cambiar mi contraseña" style={{ background: "none", border: "none", color: "rgba(255,255,255,0.3)", cursor: "pointer", fontSize: 13, marginRight: 2, flexShrink: 0, padding: 4 }}>🔑</button>}
+            {(sidebar || isMobile) && <button onClick={logout} title="Cerrar sesión" style={{ background: "none", border: "none", color: "rgba(255,255,255,0.3)", cursor: "pointer", fontSize: 14, flexShrink: 0, padding: 4 }}>⏻</button>}
           </div>
         </div>
       </aside>
