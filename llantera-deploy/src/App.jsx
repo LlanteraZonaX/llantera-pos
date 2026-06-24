@@ -65,9 +65,9 @@ function Login({ onLogin }) {
 }
 
 // ─── Componentes reutilizables ────────────────────────────────────────────────
-function KpiCard({ icono, label, valor, sub, color = "#1D4ED8", alerta }) {
+function KpiCard({ icono, label, valor, sub, color = "#1D4ED8", alerta, onClick }) {
   return (
-    <div style={{ background: "var(--color-background-secondary)", borderRadius: 14, padding: "18px 20px", border: "1px solid var(--color-border-tertiary)", display: "flex", flexDirection: "column", gap: 4, position: "relative" }}>
+    <div onClick={onClick} style={{ background: "var(--color-background-secondary)", borderRadius: 14, padding: "18px 20px", border: "1px solid var(--color-border-tertiary)", display: "flex", flexDirection: "column", gap: 4, position: "relative", cursor: onClick ? "pointer" : "default" }}>
       {alerta && <span style={{ position: "absolute", top: 10, right: 10, background: "#FEE2E2", color: "#B91C1C", fontSize: 11, fontWeight: 500, padding: "2px 8px", borderRadius: 20 }}>⚠ Atención</span>}
       <span style={{ fontSize: 22 }}>{icono}</span>
       <span style={{ fontSize: 24, fontWeight: 600, color, lineHeight: 1.2, marginTop: 4 }}>{valor}</span>
@@ -305,7 +305,7 @@ function ModalGasto({ onClose, onSaved }) {
 }
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
-function Dashboard({ setSeccion, onNuevaCompra, onNuevoGasto }) {
+function Dashboard({ setSeccion, onNuevaCompra, onNuevoGasto, onVerStockBajo }) {
   const isMobile = useIsMobile();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -327,7 +327,7 @@ function Dashboard({ setSeccion, onNuevaCompra, onNuevoGasto }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginBottom: 4, flexWrap: "wrap" }}>
-        <button onClick={onNuevaCompra} style={{ padding: "8px 16px", background: "var(--color-background-secondary)", border: "1px solid var(--color-border-secondary)", borderRadius: 9, cursor: "pointer", fontSize: 13 }}>🚚 Nueva compra</button>
+        <button onClick={onNuevaCompra} style={{ padding: "8px 16px", background: "var(--color-background-secondary)", border: "1px solid var(--color-border-secondary)", borderRadius: 9, cursor: "pointer", fontSize: 13, color: "#fff" }}>🚚 Nueva compra</button>
         <button onClick={onNuevoGasto} style={{ padding: "8px 16px", background: "#0F766E", color: "#fff", border: "none", borderRadius: 9, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>+ Gasto</button>
         <button onClick={cargar} style={{ padding: "8px 12px", background: "var(--color-background-tertiary)", border: "1px solid var(--color-border-secondary)", borderRadius: 9, cursor: "pointer", fontSize: 13 }}>↻ Actualizar</button>
       </div>
@@ -336,7 +336,7 @@ function Dashboard({ setSeccion, onNuevaCompra, onNuevoGasto }) {
         <KpiCard icono="💵" label="Efectivo" valor={fmt(k.efectivo)} sub="del día" color="#065F46" />
         <KpiCard icono="💳" label="Tarjeta" valor={fmt(k.tarjeta)} sub="del día" color="#7C3AED" />
         <KpiCard icono="🔧" label="Órdenes activas" valor={(k.en_espera||0)+(k.en_proceso||0)+(k.listo||0)} sub={`${k.listo||0} lista(s) p/ entregar`} color="#B45309" />
-        <KpiCard icono="📦" label="Stock bajo" valor={k.stock_bajo||0} sub="productos" color="#DC2626" alerta={(k.stock_bajo||0) > 0} />
+        <KpiCard icono="📦" label="Stock bajo" valor={k.stock_bajo||0} sub="productos" color="#DC2626" alerta={(k.stock_bajo||0) > 0} onClick={onVerStockBajo} />
         <KpiCard icono="💳" label="Cuentas × cobrar" valor={fmt(k.total_cxc)} sub={`${k.num_pendientes||0} clientes`} color="#92400E" />
       </div>
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1.2fr", gap: 16 }}>
@@ -360,11 +360,12 @@ function Dashboard({ setSeccion, onNuevaCompra, onNuevoGasto }) {
 }
 
 // ─── Módulo Inventario ────────────────────────────────────────────────────────
-function Inventario({ onNuevoProducto }) {
+function Inventario({ onNuevoProducto, filtroStockBajoInicial = false }) {
   const [productos, setProductos] = useState([]);
   const [buscar, setBuscar] = useState("");
   const [loading, setLoading] = useState(true);
   const [fotoModal, setFotoModal] = useState(null); // producto seleccionado
+  const [soloStockBajo, setSoloStockBajo] = useState(filtroStockBajoInicial);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -377,10 +378,16 @@ function Inventario({ onNuevoProducto }) {
 
   useEffect(() => { const t = setTimeout(cargar, 400); return () => clearTimeout(t); }, [cargar]);
 
+  const productosVisibles = soloStockBajo ? productos.filter(p => p.stock_actual <= p.stock_minimo) : productos;
+
   return (
     <div>
-      <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
-        <input style={{ ...inputStyle, flex: 1 }} placeholder="Buscar por nombre, medida o SKU..." value={buscar} onChange={e => setBuscar(e.target.value)} />
+      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+        <input style={{ ...inputStyle, flex: 1, minWidth: 200 }} placeholder="Buscar por nombre, medida o SKU..." value={buscar} onChange={e => setBuscar(e.target.value)} />
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--color-text-secondary)", cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}>
+          <input type="checkbox" checked={soloStockBajo} onChange={e => setSoloStockBajo(e.target.checked)} style={{ width: 14, height: 14, cursor: "pointer" }} />
+          Solo stock bajo
+        </label>
         <button onClick={onNuevoProducto} style={{ padding: "8px 18px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>+ Nuevo producto</button>
       </div>
       {loading ? <div style={{ textAlign: "center", padding: 40, color: "var(--color-text-secondary)" }}>Cargando...</div> : (
@@ -394,9 +401,9 @@ function Inventario({ onNuevoProducto }) {
               </tr>
             </thead>
             <tbody>
-              {productos.length === 0
-                ? <tr><td colSpan={7} style={{ padding: 40, textAlign: "center", color: "var(--color-text-secondary)" }}>No hay productos. ¡Agrega tu primer producto!</td></tr>
-                : productos.map(p => (
+              {productosVisibles.length === 0
+                ? <tr><td colSpan={7} style={{ padding: 40, textAlign: "center", color: "var(--color-text-secondary)" }}>{soloStockBajo ? "No hay productos con stock bajo 🎉" : "No hay productos. ¡Agrega tu primer producto!"}</td></tr>
+                : productosVisibles.map(p => (
                   <tr key={p.id} style={{ borderTop: "1px solid var(--color-border-tertiary)" }}>
                     <td style={{ padding: "8px 14px" }}>
                       <button onClick={() => setFotoModal(p)} style={{ width: 40, height: 40, borderRadius: 8, border: "1px solid var(--color-border-secondary)", background: "var(--color-background-tertiary)", overflow: "hidden", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -2024,6 +2031,7 @@ function AppPrivada() {
     try { return JSON.parse(localStorage.getItem("llantera_user")); } catch { return null; }
   });
   const [seccion, setSeccion] = useState("dashboard");
+  const [filtroStockBajo, setFiltroStockBajo] = useState(false);
   const [modal, setModal] = useState(null);
   const isMobile = useIsMobile();
   const [sidebar, setSidebar] = useState(true);       // colapsar/expandir en DESKTOP
@@ -2052,7 +2060,8 @@ function AppPrivada() {
   // Si la sección activa ya no es visible para este usuario (ej. cambio de rol), saltar a la primera permitida.
   const seccionActiva = hojasVisibles.find(n => n.id === seccion) ? seccion : (hojasVisibles[0]?.id || "dashboard");
   const titulo = hojasVisibles.find(n => n.id === seccionActiva)?.label || seccionActiva;
-  const irASeccion = (id) => { setSeccion(id); setMenuAbierto(false); };
+  const irASeccion = (id) => { setFiltroStockBajo(false); setSeccion(id); setMenuAbierto(false); };
+  const verStockBajo = () => { setFiltroStockBajo(true); setSeccion("inventario"); };
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", fontFamily: "var(--font-sans, system-ui)", color: "var(--color-text-primary)", background: "var(--color-background-tertiary)" }}>
@@ -2151,11 +2160,11 @@ function AppPrivada() {
           </div>
         )}
 
-        {seccionActiva === "dashboard"   && <Dashboard setSeccion={setSeccion} onNuevaCompra={() => setModal("compra")} onNuevoGasto={() => setModal("gasto")} />}
+        {seccionActiva === "dashboard"   && <Dashboard setSeccion={setSeccion} onNuevaCompra={() => setModal("compra")} onNuevoGasto={() => setModal("gasto")} onVerStockBajo={verStockBajo} />}
         {seccionActiva === "ventas"      && <Ventas />}
         {seccionActiva === "catalogo"    && <Catalogo />}
         {seccionActiva === "ordenes"     && <Ordenes />}
-        {seccionActiva === "inventario"  && <Inventario onNuevoProducto={() => setModal("producto")} />}
+        {seccionActiva === "inventario"  && <Inventario onNuevoProducto={() => setModal("producto")} filtroStockBajoInicial={filtroStockBajo} />}
         {seccionActiva === "lotes_recepcion"  && <RecepcionLotes />}
         {seccionActiva === "lotes_devolucion" && <DevolucionLotes />}
         {seccionActiva === "compras"     && <Compras onNuevaCompra={() => setModal("compra")} />}
