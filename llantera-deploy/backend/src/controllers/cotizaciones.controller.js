@@ -114,6 +114,7 @@ export const verPublica = async (req, res) => {
       `SELECT c.id, c.folio, c.cliente_nombre, c.subtotal, c.descuento, c.total,
               c.estado, c.created_at, c.vigencia_dias,
               n.nombre as negocio_nombre, n.logo_url, n.telefono as negocio_telefono,
+              n.direccion as negocio_direccion, n.facebook_url as negocio_facebook,
               u.nombre as vendedor_nombre
        FROM cotizaciones c
        JOIN negocios n ON c.negocio_id = n.id

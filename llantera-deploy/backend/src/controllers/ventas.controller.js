@@ -45,7 +45,8 @@ export const crear = async (req, res) => {
 
     const {
       cliente_id, items, metodo_pago, monto_pagado,
-      descuento_global = 0, requiere_factura = false, notas
+      descuento_global = 0, requiere_factura = false, notas,
+      aplicar_iva = false
     } = req.body;
 
     if (!items?.length) throw new Error('La venta debe tener al menos un producto');
@@ -72,7 +73,7 @@ export const crear = async (req, res) => {
 
     const descuento = descuento_global || 0;
     const base = subtotal - descuento;
-    const iva = base * 0.16;
+    const iva = aplicar_iva ? base * 0.16 : 0;
     const total = base + iva;
     const cambio = Math.max(0, (monto_pagado || 0) - total);
     const estado = (monto_pagado || 0) >= total ? 'pagada' : 'pendiente';

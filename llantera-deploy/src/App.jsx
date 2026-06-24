@@ -719,6 +719,82 @@ function ModalCliente({ onClose, onSaved }) {
 }
 
 // ─── Gestión de Usuarios (solo admin) ─────────────────────────────────────────
+function Configuracion() {
+  const [datos, setDatos] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [guardando, setGuardando] = useState(false);
+  const [mensaje, setMensaje] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    api.negocio().then(setDatos).catch(() => setError("No se pudieron cargar los datos del negocio")).finally(() => setLoading(false));
+  }, []);
+
+  const cambiar = (campo, valor) => setDatos(prev => ({ ...prev, [campo]: valor }));
+
+  const guardar = async () => {
+    setGuardando(true); setMensaje(""); setError("");
+    try {
+      const actualizado = await api.actualizarNegocio({
+        nombre: datos.nombre, logo_url: datos.logo_url, telefono: datos.telefono,
+        direccion: datos.direccion, facebook_url: datos.facebook_url,
+      });
+      setDatos(actualizado);
+      setMensaje("Datos guardados correctamente");
+    } catch (e) { setError(e.message || "Error al guardar"); } finally { setGuardando(false); }
+  };
+
+  if (loading) return <div style={{ textAlign: "center", padding: 40, color: "var(--color-text-secondary)" }}>Cargando...</div>;
+  if (!datos) return <div style={{ textAlign: "center", padding: 40, color: "var(--color-text-secondary)" }}>{error || "No se pudo cargar"}</div>;
+
+  return (
+    <div style={{ maxWidth: 480 }}>
+      <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 0, marginBottom: 20 }}>
+        Estos datos aparecen en las cotizaciones que comparten con tus clientes por WhatsApp.
+      </p>
+
+      <div style={{ background: "var(--color-background-secondary)", borderRadius: 14, border: "1px solid var(--color-border-tertiary)", padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+        {error && <div style={{ background: "#FEE2E2", color: "#B91C1C", borderRadius: 8, padding: "8px 12px", fontSize: 12 }}>{error}</div>}
+        {mensaje && <div style={{ background: "#D1FAE5", color: "#065F46", borderRadius: 8, padding: "8px 12px", fontSize: 12 }}>{mensaje}</div>}
+
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          {datos.logo_url
+            ? <img src={datos.logo_url} alt="Logo" style={{ width: 56, height: 56, borderRadius: 10, objectFit: "cover", border: "1px solid var(--color-border-tertiary)" }} />
+            : <div style={{ width: 56, height: 56, borderRadius: 10, background: "var(--color-background-tertiary)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, flexShrink: 0 }}>🛞</div>}
+          <div style={{ flex: 1 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 4 }}>Logo del negocio (URL de imagen)</label>
+            <input style={inputStyle} placeholder="https://..." value={datos.logo_url || ""} onChange={e => cambiar("logo_url", e.target.value)} />
+          </div>
+        </div>
+
+        <div>
+          <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 4 }}>Nombre del negocio</label>
+          <input style={inputStyle} value={datos.nombre || ""} onChange={e => cambiar("nombre", e.target.value)} />
+        </div>
+
+        <div>
+          <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 4 }}>Dirección</label>
+          <input style={inputStyle} placeholder="Calle, número, colonia, ciudad" value={datos.direccion || ""} onChange={e => cambiar("direccion", e.target.value)} />
+        </div>
+
+        <div>
+          <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 4 }}>Teléfono / WhatsApp</label>
+          <input style={inputStyle} placeholder="10 dígitos" value={datos.telefono || ""} onChange={e => cambiar("telefono", e.target.value)} />
+        </div>
+
+        <div>
+          <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 4 }}>Página de Facebook</label>
+          <input style={inputStyle} placeholder="https://facebook.com/tu-negocio" value={datos.facebook_url || ""} onChange={e => cambiar("facebook_url", e.target.value)} />
+        </div>
+
+        <button onClick={guardar} disabled={guardando} style={{ marginTop: 4, padding: "10px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600, opacity: guardando ? 0.6 : 1 }}>
+          {guardando ? "Guardando..." : "Guardar cambios"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function Usuarios() {
   const [lista, setLista] = useState([]);
   const [roles, setRoles] = useState([]);
@@ -932,6 +1008,7 @@ function Ventas() {
   const [metodoPago, setMetodoPago] = useState("efectivo");
   const [montoPagado, setMontoPagado] = useState("");
   const [descuento, setDescuento] = useState(0);
+  const [cobrarIva, setCobrarIva] = useState(false);
   const [procesando, setProcesando] = useState(false);
   const [error, setError] = useState("");
   const [ventaLista, setVentaLista] = useState(null);
@@ -950,19 +1027,38 @@ function Ventas() {
     return () => clearTimeout(t);
   }, [buscar]);
 
+  // Cada línea del carrito guarda su precio normal (producto.precio_venta) y,
+  // por separado, el "monto a cobrar" para esa línea — que por default es
+  // cantidad x precio, pero el cajero puede editarlo libremente (no es un
+  // descuento, es lo que realmente se le va a cobrar al cliente por esa línea).
   const agregar = (producto) => {
     setCarrito(prev => {
       const existe = prev.find(i => i.producto.id === producto.id);
-      if (existe) return prev.map(i => i.producto.id === producto.id ? { ...i, cantidad: i.cantidad + 1 } : i);
-      return [...prev, { producto, cantidad: 1 }];
+      if (existe) {
+        const cantidad = existe.cantidad + 1;
+        return prev.map(i => i.producto.id === producto.id
+          ? { ...i, cantidad, montoCobrado: i.montoEditado ? i.montoCobrado : cantidad * i.producto.precio_venta }
+          : i);
+      }
+      return [...prev, { producto, cantidad: 1, montoCobrado: producto.precio_venta, montoEditado: false }];
     });
   };
   const quitar = (id) => setCarrito(prev => prev.filter(i => i.producto.id !== id));
-  const cambiarCantidad = (id, cantidad) => setCarrito(prev => prev.map(i => i.producto.id === id ? { ...i, cantidad: Math.max(1, cantidad) } : i));
+  const cambiarCantidad = (id, cantidad) => setCarrito(prev => prev.map(i => {
+    if (i.producto.id !== id) return i;
+    const nuevaCantidad = Math.max(1, cantidad);
+    // Si el cajero no había tocado el monto de esa línea, lo recalculamos normal.
+    // Si ya lo había editado a mano, respetamos su ajuste y no lo pisamos.
+    const montoCobrado = i.montoEditado ? i.montoCobrado : nuevaCantidad * i.producto.precio_venta;
+    return { ...i, cantidad: nuevaCantidad, montoCobrado };
+  }));
+  const cambiarMontoCobrado = (id, monto) => setCarrito(prev => prev.map(i =>
+    i.producto.id === id ? { ...i, montoCobrado: Math.max(0, monto), montoEditado: true } : i
+  ));
 
-  const subtotal = carrito.reduce((s, i) => s + i.cantidad * i.producto.precio_venta, 0);
+  const subtotal = carrito.reduce((s, i) => s + (parseFloat(i.montoCobrado) || 0), 0);
   const base = Math.max(0, subtotal - (parseFloat(descuento) || 0));
-  const iva = base * 0.16;
+  const iva = cobrarIva ? base * 0.16 : 0;
   const total = base + iva;
 
   const cobrar = async () => {
@@ -971,17 +1067,24 @@ function Ventas() {
     try {
       const data = await api.crearVenta({
         cliente_id: clienteId || null,
-        items: carrito.map(i => ({ producto_id: i.producto.id, cantidad: i.cantidad, precio_unitario: i.producto.precio_venta })),
+        // Se envía el precio unitario efectivo (monto a cobrar / cantidad) para
+        // que el total de esa línea coincida con lo que el cajero ajustó.
+        items: carrito.map(i => ({
+          producto_id: i.producto.id,
+          cantidad: i.cantidad,
+          precio_unitario: i.cantidad > 0 ? (parseFloat(i.montoCobrado) || 0) / i.cantidad : 0,
+        })),
         metodo_pago: metodoPago,
         monto_pagado: montoPagado ? parseFloat(montoPagado) : total,
         descuento_global: parseFloat(descuento) || 0,
+        aplicar_iva: cobrarIva,
       });
       setVentaLista(data);
     } catch (e) { setError(e.message || "Error al registrar la venta"); } finally { setProcesando(false); }
   };
 
   const nuevaVenta = () => {
-    setCarrito([]); setClienteId(""); setMontoPagado(""); setDescuento(0); setVentaLista(null);
+    setCarrito([]); setClienteId(""); setMontoPagado(""); setDescuento(0); setCobrarIva(false); setVentaLista(null);
   };
 
   if (ventaLista) {
@@ -1026,15 +1129,33 @@ function Ventas() {
         {!carrito.length ? (
           <div style={{ fontSize: 12, color: "var(--color-text-secondary)", textAlign: "center", padding: "20px 0" }}>Toca un producto para agregarlo</div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12, maxHeight: 220, overflowY: "auto" }}>
-            {carrito.map(i => (
-              <div key={i.producto.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6, fontSize: 12 }}>
-                <div style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{i.producto.nombre}</div>
-                <input type="number" min={1} value={i.cantidad} onChange={e => cambiarCantidad(i.producto.id, parseInt(e.target.value) || 1)} style={{ width: 40, padding: "2px 4px", fontSize: 11, border: "1px solid var(--color-border-secondary)", borderRadius: 4, background: "var(--color-background-primary)", color: "var(--color-text-primary)" }} />
-                <span style={{ fontWeight: 600, minWidth: 55, textAlign: "right" }}>{fmt(i.cantidad * i.producto.precio_venta)}</span>
-                <button onClick={() => quitar(i.producto.id)} style={{ background: "none", border: "none", color: "#B91C1C", cursor: "pointer", fontSize: 13 }}>✕</button>
-              </div>
-            ))}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12, maxHeight: 260, overflowY: "auto" }}>
+            {carrito.map(i => {
+              const precioNormal = i.cantidad * i.producto.precio_venta;
+              const montoNum = parseFloat(i.montoCobrado) || 0;
+              const ajustado = i.montoEditado && Math.abs(montoNum - precioNormal) > 0.001;
+              return (
+                <div key={i.producto.id} style={{ display: "flex", flexDirection: "column", gap: 4, paddingBottom: 6, borderBottom: "1px solid var(--color-border-tertiary)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6, fontSize: 12 }}>
+                    <div style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{i.producto.nombre}</div>
+                    <input type="number" min={1} value={i.cantidad} onChange={e => cambiarCantidad(i.producto.id, parseInt(e.target.value) || 1)} style={{ width: 40, padding: "2px 4px", fontSize: 11, border: "1px solid var(--color-border-secondary)", borderRadius: 4, background: "var(--color-background-primary)", color: "var(--color-text-primary)" }} />
+                    <button onClick={() => quitar(i.producto.id)} style={{ background: "none", border: "none", color: "#B91C1C", cursor: "pointer", fontSize: 13 }}>✕</button>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 10, color: "var(--color-text-secondary)" }}>
+                      {fmt(i.producto.precio_venta)} c/u {ajustado && <span style={{ textDecoration: "line-through" }}>{fmt(precioNormal)}</span>}
+                    </span>
+                    <input
+                      type="number" min={0} step="0.01"
+                      value={i.montoCobrado}
+                      onChange={e => cambiarMontoCobrado(i.producto.id, parseFloat(e.target.value) || 0)}
+                      title="Monto a cobrar por esta línea (puedes editarlo)"
+                      style={{ width: 80, padding: "2px 6px", fontSize: 12, fontWeight: 700, textAlign: "right", border: `1px solid ${ajustado ? "#F59E0B" : "var(--color-border-secondary)"}`, borderRadius: 4, background: "var(--color-background-primary)", color: ajustado ? "#B45309" : "var(--color-text-primary)" }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -1052,9 +1173,14 @@ function Ventas() {
           <input style={{ ...inputStyle, flex: 1 }} type="number" min={0} placeholder="Descuento $" value={descuento} onChange={e => setDescuento(e.target.value)} />
         </div>
 
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, marginBottom: 8, cursor: "pointer", userSelect: "none" }}>
+          <input type="checkbox" checked={cobrarIva} onChange={e => setCobrarIva(e.target.checked)} style={{ width: 15, height: 15, cursor: "pointer" }} />
+          Cobrar IVA (16%) en esta venta
+        </label>
+
         <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 8 }}>
           <div style={{ display: "flex", justifyContent: "space-between" }}><span>Subtotal</span><span>{fmt(subtotal)}</span></div>
-          <div style={{ display: "flex", justifyContent: "space-between" }}><span>IVA (16%)</span><span>{fmt(iva)}</span></div>
+          {cobrarIva && <div style={{ display: "flex", justifyContent: "space-between" }}><span>IVA (16%)</span><span>{fmt(iva)}</span></div>}
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: 16, padding: "10px 0", borderTop: "1px solid var(--color-border-tertiary)", marginBottom: 12 }}>
           <span>Total</span><span style={{ color: "#1D4ED8" }}>{fmt(total)}</span>
@@ -1225,6 +1351,7 @@ const NAV = [
   { id: "gastos",      icon: "💸", label: "Gastos",              permiso: "gastos" },
   { id: "clientes",    icon: "👥", label: "Clientes / CRM",      permiso: "clientes" },
   { id: "usuarios",    icon: "🔐", label: "Usuarios",            permiso: "todo" },
+  { id: "configuracion", icon: "🏢", label: "Configuración",     permiso: "todo" },
 ];
 
 const puedeVer = (permisos, clave) => {
@@ -1257,9 +1384,21 @@ function CotizacionPublica({ token }) {
   return (
     <div style={{ minHeight: "100vh", background: "#F1F5F9", padding: "24px 16px", fontFamily: "system-ui" }}>
       <div style={{ maxWidth: 480, margin: "0 auto", background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 10px 40px rgba(0,0,0,0.08)" }}>
-        <div style={{ background: "#0F172A", color: "#fff", padding: "20px 24px" }}>
-          <div style={{ fontSize: 16, fontWeight: 700 }}>{cot.negocio_nombre}</div>
-          <div style={{ fontSize: 12, opacity: 0.6 }}>Cotización {cot.folio} · {fmtFecha(cot.created_at)}</div>
+        <div style={{ background: "linear-gradient(135deg, #0F172A 0%, #1E293B 100%)", color: "#fff", padding: "24px 24px 20px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: cot.negocio_direccion ? 10 : 0 }}>
+            {cot.logo_url ? (
+              <img src={cot.logo_url} alt={cot.negocio_nombre} style={{ width: 48, height: 48, borderRadius: 10, objectFit: "cover", background: "#fff", flexShrink: 0 }} />
+            ) : (
+              <div style={{ width: 48, height: 48, borderRadius: 10, background: "rgba(255,255,255,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>🛞</div>
+            )}
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 17, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cot.negocio_nombre}</div>
+              <div style={{ fontSize: 11, opacity: 0.65 }}>Cotización {cot.folio} · {fmtFecha(cot.created_at)}</div>
+            </div>
+          </div>
+          {cot.negocio_direccion && (
+            <div style={{ fontSize: 11, opacity: 0.7, paddingLeft: 60 }}>📍 {cot.negocio_direccion}</div>
+          )}
         </div>
         <div style={{ padding: 24 }}>
           {cot.cliente_nombre && <p style={{ fontSize: 14, marginBottom: 16 }}>Hola <strong>{cot.cliente_nombre}</strong>, aquí está tu cotización:</p>}
@@ -1290,6 +1429,18 @@ function CotizacionPublica({ token }) {
               style={{ display: "block", textAlign: "center", marginTop: 16, padding: "12px", background: "#25D366", color: "#fff", borderRadius: 8, textDecoration: "none", fontWeight: 600, fontSize: 13 }}>
               📲 Confirmar por WhatsApp
             </a>
+          )}
+          {(cot.negocio_telefono || cot.negocio_facebook) && (
+            <div style={{ display: "flex", justifyContent: "center", gap: 16, marginTop: 14, paddingTop: 14, borderTop: "1px solid #F1F5F9" }}>
+              {cot.negocio_telefono && (
+                <span style={{ fontSize: 11, color: "#64748B", display: "flex", alignItems: "center", gap: 4 }}>📞 {cot.negocio_telefono}</span>
+              )}
+              {cot.negocio_facebook && (
+                <a href={cot.negocio_facebook} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: "#1D4ED8", textDecoration: "none", display: "flex", alignItems: "center", gap: 4, fontWeight: 600 }}>
+                  👍 Síguenos en Facebook
+                </a>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -1424,6 +1575,7 @@ function AppPrivada() {
         {seccionActiva === "gastos"      && <Gastos onNuevoGasto={() => setModal("gasto")} />}
         {seccionActiva === "clientes"    && <Clientes />}
         {seccionActiva === "usuarios"    && <Usuarios />}
+        {seccionActiva === "configuracion" && <Configuracion />}
       </main>
 
       {/* Modales */}
