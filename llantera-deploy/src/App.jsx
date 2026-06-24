@@ -1543,6 +1543,7 @@ function Ventas() {
   const [metodoPago, setMetodoPago] = useState("efectivo");
   const [montoPagado, setMontoPagado] = useState("");
   const [descuento, setDescuento] = useState(0);
+  const [notas, setNotas] = useState("");
   const [cobrarIva, setCobrarIva] = useState(false);
   const [procesando, setProcesando] = useState(false);
   const [error, setError] = useState("");
@@ -1613,13 +1614,14 @@ function Ventas() {
         monto_pagado: montoPagado ? parseFloat(montoPagado) : total,
         descuento_global: parseFloat(descuento) || 0,
         aplicar_iva: cobrarIva,
+        notas: notas || null,
       });
       setVentaLista(data);
     } catch (e) { setError(e.message || "Error al registrar la venta"); } finally { setProcesando(false); }
   };
 
   const nuevaVenta = () => {
-    setCarrito([]); setClienteId(""); setMontoPagado(""); setDescuento(0); setCobrarIva(false); setVentaLista(null);
+    setCarrito([]); setClienteId(""); setMontoPagado(""); setDescuento(0); setNotas(""); setCobrarIva(false); setVentaLista(null);
   };
 
   if (ventaLista) {
@@ -1718,6 +1720,11 @@ function Ventas() {
           <input type="checkbox" checked={cobrarIva} onChange={e => setCobrarIva(e.target.checked)} style={{ width: 15, height: 15, cursor: "pointer" }} />
           Cobrar IVA (16%) en esta venta
         </label>
+
+        <div style={{ marginBottom: 8 }}>
+          <label style={labelStyle}>Notas (ej. motivo del descuento)</label>
+          <input style={inputStyle} placeholder="Ej: descuento por cliente frecuente" value={notas} onChange={e => setNotas(e.target.value)} />
+        </div>
 
         <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 8 }}>
           <div style={{ display: "flex", justifyContent: "space-between" }}><span>Subtotal</span><span>{fmt(subtotal)}</span></div>
