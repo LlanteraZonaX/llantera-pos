@@ -1644,7 +1644,7 @@ function Ventas() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12 }}>
             {productos.map(p => (
               <button key={p.id} onClick={() => agregar(p)} style={{ textAlign: "left", background: "var(--color-background-secondary)", borderRadius: 10, border: "1px solid var(--color-border-tertiary)", padding: 10, cursor: "pointer", display: "flex", flexDirection: "column", gap: 4 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.3 }}>{p.nombre}</div>
+                <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.3, color: "#fff" }}>{p.nombre}</div>
                 {p.medida && <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>{p.medida}</div>}
                 <div style={{ fontSize: 14, fontWeight: 700, color: "#1D4ED8" }}>{fmt(p.precio_venta)}</div>
                 <div style={{ fontSize: 10, color: p.stock_actual > 0 ? "#059669" : "#B91C1C" }}>
