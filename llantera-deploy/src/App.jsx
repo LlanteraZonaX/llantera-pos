@@ -1700,12 +1700,18 @@ function Ventas() {
         </select>
 
         <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-          <select style={{ ...inputStyle, flex: 1 }} value={metodoPago} onChange={e => setMetodoPago(e.target.value)}>
-            <option value="efectivo">Efectivo</option>
-            <option value="tarjeta">Tarjeta</option>
-            <option value="transferencia">Transferencia</option>
-          </select>
-          <input style={{ ...inputStyle, flex: 1 }} type="number" min={0} placeholder="Descuento $" value={descuento} onChange={e => setDescuento(e.target.value)} />
+          <div style={{ flex: 1 }}>
+            <label style={labelStyle}>Método de pago</label>
+            <select style={inputStyle} value={metodoPago} onChange={e => setMetodoPago(e.target.value)}>
+              <option value="efectivo">Efectivo</option>
+              <option value="tarjeta">Tarjeta</option>
+              <option value="transferencia">Transferencia</option>
+            </select>
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={labelStyle}>Descuento en pesos ($)</label>
+            <input style={inputStyle} type="number" min={0} placeholder="0" value={descuento} onChange={e => setDescuento(e.target.value)} />
+          </div>
         </div>
 
         <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, marginBottom: 8, cursor: "pointer", userSelect: "none" }}>
