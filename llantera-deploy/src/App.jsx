@@ -575,12 +575,18 @@ function Ordenes() {
   );
 }
 
-// ─── Módulo Lotes de llantas (recepción + clasificación + defectuosas) ────────
-function Lotes() {
+// ─── Módulo Lotes: Recepción (clasificación por medida) ───────────────────────
+const sugerirFolio = (fechaISO) => {
+  if (!fechaISO) return "";
+  const [y, m, d] = fechaISO.split("-");
+  return `LOTE${d}${m}${y.slice(2)}`;
+};
+
+function RecepcionLotes() {
   const [lotes, setLotes] = useState([]);
   const [productos, setProductos] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [modal, setModal] = useState(false);
+  const [modal, setModal] = useState(null); // { tipo: 'nuevo' } | { tipo: 'clasificar', lote }
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -597,10 +603,10 @@ function Lotes() {
   return (
     <div>
       <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 0, marginBottom: 16 }}>
-        Registra cada lote físico que llega, clasifícalo por medida y marca las piezas defectuosas. El sistema suma automáticamente al almacén solo las piezas efectivas (recibidas − defectuosas).
+        Registra el lote que llega (folio, proveedor y cantidad total física) y clasifícalo por medida/producto. Cada línea clasificada suma de inmediato al almacén. Si después de revisar calidad hay piezas para regresar, usa "Devolución de lotes" con el mismo folio.
       </p>
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
-        <button onClick={() => setModal(true)} style={{ padding: "8px 18px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>+ Nuevo lote</button>
+        <button onClick={() => setModal({ tipo: "nuevo" })} style={{ padding: "8px 18px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>+ Nuevo lote</button>
       </div>
 
       {loading ? <div style={{ textAlign: "center", padding: 40, color: "var(--color-text-secondary)" }}>Cargando...</div> :
@@ -613,62 +619,83 @@ function Lotes() {
                 <div style={{ color: "var(--color-text-secondary)", fontSize: 13, marginTop: 3 }}>{l.proveedor_nombre || l.proveedor_catalogo_nombre || "Sin proveedor"}</div>
                 <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2 }}>Recibido: {fmtFecha(l.fecha_recepcion)}</div>
               </div>
-              <div style={{ display: "flex", gap: 18, textAlign: "right" }}>
-                <div>
-                  <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Recibidas</div>
+              <div style={{ display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap" }}>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Total lote</div>
                   <div style={{ fontWeight: 700, fontSize: 15 }}>{parseFloat(l.cantidad_total)}</div>
                 </div>
-                <div>
-                  <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Defectuosas</div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Clasificado</div>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: "#059669" }}>{parseFloat(l.total_clasificado)}</div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Devuelto</div>
                   <div style={{ fontWeight: 700, fontSize: 15, color: parseFloat(l.cantidad_defectuosa) > 0 ? "#B91C1C" : "var(--color-text-primary)" }}>{parseFloat(l.cantidad_defectuosa)}</div>
                 </div>
-                <div>
-                  <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Efectivas en almacén</div>
-                  <div style={{ fontWeight: 700, fontSize: 15, color: "#059669" }}>{parseFloat(l.cantidad_efectiva)}</div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Pendiente</div>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: l.total_pendiente > 0 ? "#D97706" : "var(--color-text-primary)" }}>{l.total_pendiente}</div>
                 </div>
+                <button onClick={() => setModal({ tipo: "clasificar", lote: l })} style={{ padding: "7px 14px", background: "var(--color-background-tertiary)", border: "1px solid var(--color-border-secondary)", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>+ Clasificar</button>
               </div>
             </div>
           ))
       }
 
-      {modal && <ModalLote productos={productos} onClose={() => setModal(false)} onSaved={() => { setModal(false); cargar(); }} />}
+      {modal?.tipo === "nuevo" && <ModalNuevoLote productos={productos} onClose={() => setModal(null)} onSaved={() => { setModal(null); cargar(); }} />}
+      {modal?.tipo === "clasificar" && <ModalClasificarLote lote={modal.lote} productos={productos} onClose={() => setModal(null)} onSaved={() => { setModal(null); cargar(); }} />}
     </div>
   );
 }
 
-function ModalLote({ productos, onClose, onSaved }) {
-  const [form, setForm] = useState({ proveedor_nombre: "", fecha_recepcion: new Date().toISOString().split("T")[0], notas: "" });
-  const [items, setItems] = useState([{ producto_id: "", cantidad_recibida: "", cantidad_defectuosa: "", razon_defecto: "" }]);
+function LineasClasificacion({ items, setItems, productos }) {
+  const addItem = () => setItems(p => [...p, { producto_id: "", cantidad: "" }]);
+  const upd = (idx, k, v) => setItems(p => { const a = [...p]; a[idx] = { ...a[idx], [k]: v }; return a; });
+  const total = items.reduce((s, i) => s + (parseFloat(i.cantidad) || 0), 0);
+
+  return (
+    <div>
+      <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>Clasificación por medida / producto</div>
+      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 32px", gap: 6, marginBottom: 6, fontSize: 11, color: "var(--color-text-secondary)", fontWeight: 600 }}>
+        <div>Producto / medida</div><div>Cantidad</div><div></div>
+      </div>
+      {items.map((item, idx) => (
+        <div key={idx} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 32px", gap: 6, marginBottom: 8 }}>
+          <select style={inputStyle} value={item.producto_id} onChange={e => upd(idx, "producto_id", e.target.value)}>
+            <option value="">— Seleccionar producto/medida —</option>
+            {(productos || []).map(p => <option key={p.id} value={p.id}>{p.nombre}{p.medida ? ` (${p.medida})` : ""}</option>)}
+          </select>
+          <input type="number" min={0} style={inputStyle} placeholder="Cantidad" value={item.cantidad} onChange={e => upd(idx, "cantidad", e.target.value)} />
+          <button onClick={() => setItems(p => p.filter((_, i) => i !== idx))} disabled={items.length === 1} style={{ background: "#FEE2E2", border: "none", borderRadius: 8, cursor: "pointer", color: "#B91C1C", fontSize: 14 }}>✕</button>
+        </div>
+      ))}
+      <button onClick={addItem} style={{ width: "100%", padding: "7px", border: "1px dashed #93C5FD", borderRadius: 8, background: "none", color: "#1D4ED8", cursor: "pointer", fontSize: 13, marginBottom: 12 }}>+ Agregar otra medida</button>
+      <div style={{ fontSize: 12, color: "var(--color-text-secondary)", textAlign: "right", marginBottom: 16 }}>Total clasificado en esta captura: <strong style={{ color: "#059669" }}>{total}</strong></div>
+    </div>
+  );
+}
+
+function ModalNuevoLote({ productos, onClose, onSaved }) {
+  const [form, setForm] = useState({ folio: "", proveedor_nombre: "", fecha_recepcion: new Date().toISOString().split("T")[0], cantidad_total: "", notas: "" });
+  const [folioTocado, setFolioTocado] = useState(false);
+  const [items, setItems] = useState([{ producto_id: "", cantidad: "" }]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const addItem = () => setItems(p => [...p, { producto_id: "", cantidad_recibida: "", cantidad_defectuosa: "", razon_defecto: "" }]);
-  const upd = (idx, k, v) => setItems(p => { const a = [...p]; a[idx] = { ...a[idx], [k]: v }; return a; });
-
-  const totales = items.reduce((acc, i) => {
-    const recibida = parseFloat(i.cantidad_recibida) || 0;
-    const defectuosa = parseFloat(i.cantidad_defectuosa) || 0;
-    return { recibida: acc.recibida + recibida, defectuosa: acc.defectuosa + defectuosa, efectiva: acc.efectiva + (recibida - defectuosa) };
-  }, { recibida: 0, defectuosa: 0, efectiva: 0 });
+  useEffect(() => {
+    if (!folioTocado) setForm(p => ({ ...p, folio: sugerirFolio(p.fecha_recepcion) }));
+  }, [form.fecha_recepcion, folioTocado]);
 
   const guardar = async () => {
-    const validItems = items.filter(i => i.producto_id && parseFloat(i.cantidad_recibida) > 0);
-    if (!validItems.length) return setError("Agrega al menos una línea con producto/medida y cantidad recibida");
-    for (const i of validItems) {
-      if ((parseFloat(i.cantidad_defectuosa) || 0) > parseFloat(i.cantidad_recibida)) {
-        return setError("La cantidad defectuosa no puede ser mayor a la recibida en ninguna línea");
-      }
-    }
+    if (!form.folio.trim()) return setError("El folio del lote es obligatorio (ej. LOTE150626)");
+    if (!form.cantidad_total || parseFloat(form.cantidad_total) <= 0) return setError("Indica la cantidad total que llegó físicamente en el lote");
+    const validItems = items.filter(i => i.producto_id && parseFloat(i.cantidad) > 0);
     setLoading(true); setError("");
     try {
       await api.crearLote({
         ...form,
-        items: validItems.map(i => ({
-          producto_id: i.producto_id,
-          cantidad_recibida: parseFloat(i.cantidad_recibida),
-          cantidad_defectuosa: parseFloat(i.cantidad_defectuosa) || 0,
-          razon_defecto: i.razon_defecto || null,
-        })),
+        cantidad_total: parseFloat(form.cantidad_total),
+        items: validItems.map(i => ({ producto_id: i.producto_id, cantidad: parseFloat(i.cantidad) })),
       });
       onSaved();
     } catch (e) { setError(e.message); } finally { setLoading(false); }
@@ -676,50 +703,23 @@ function ModalLote({ productos, onClose, onSaved }) {
 
   return (
     <div style={overlayStyle}>
-      <div style={{ ...modalBase, maxWidth: 760 }}>
+      <div style={{ ...modalBase, maxWidth: 700 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
           <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>📥 Nuevo lote de llantas</h2>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)" }}>✕</button>
         </div>
         {error && <div style={{ background: "#FEE2E2", color: "#B91C1C", borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 12 }}>{error}</div>}
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
-          <div><label style={labelStyle}>Proveedor</label><input style={inputStyle} placeholder="Nombre del proveedor" value={form.proveedor_nombre} onChange={e => setForm(p => ({ ...p, proveedor_nombre: e.target.value }))} /></div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+          <div><label style={labelStyle}>Folio del lote *</label><input style={inputStyle} placeholder="LOTE150626" value={form.folio} onChange={e => { setFolioTocado(true); setForm(p => ({ ...p, folio: e.target.value })); }} /></div>
           <div><label style={labelStyle}>Fecha de recepción *</label><input type="date" style={inputStyle} value={form.fecha_recepcion} onChange={e => setForm(p => ({ ...p, fecha_recepcion: e.target.value }))} /></div>
+          <div><label style={labelStyle}>Proveedor</label><input style={inputStyle} placeholder="Nombre del proveedor" value={form.proveedor_nombre} onChange={e => setForm(p => ({ ...p, proveedor_nombre: e.target.value }))} /></div>
+          <div><label style={labelStyle}>Cantidad total recibida *</label><input type="number" min={0} style={inputStyle} placeholder="Ej. 72" value={form.cantidad_total} onChange={e => setForm(p => ({ ...p, cantidad_total: e.target.value }))} /></div>
         </div>
         <div><label style={labelStyle}>Notas</label><input style={{ ...inputStyle, marginBottom: 16 }} placeholder="Observaciones del lote..." value={form.notas} onChange={e => setForm(p => ({ ...p, notas: e.target.value }))} /></div>
 
-        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>Clasificación por medida / producto</div>
-        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1.4fr 32px", gap: 6, marginBottom: 6, fontSize: 11, color: "var(--color-text-secondary)", fontWeight: 600 }}>
-          <div>Producto / medida</div><div>Recibidas</div><div>Defectuosas</div><div>Motivo del defecto</div><div></div>
-        </div>
-        {items.map((item, idx) => {
-          const efectiva = (parseFloat(item.cantidad_recibida) || 0) - (parseFloat(item.cantidad_defectuosa) || 0);
-          return (
-            <div key={idx} style={{ marginBottom: 8 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1.4fr 32px", gap: 6 }}>
-                <select style={inputStyle} value={item.producto_id} onChange={e => upd(idx, "producto_id", e.target.value)}>
-                  <option value="">— Seleccionar producto/medida —</option>
-                  {(productos || []).map(p => <option key={p.id} value={p.id}>{p.nombre}{p.medida ? ` (${p.medida})` : ""}</option>)}
-                </select>
-                <input type="number" min={0} style={inputStyle} placeholder="Cant." value={item.cantidad_recibida} onChange={e => upd(idx, "cantidad_recibida", e.target.value)} />
-                <input type="number" min={0} style={inputStyle} placeholder="0" value={item.cantidad_defectuosa} onChange={e => upd(idx, "cantidad_defectuosa", e.target.value)} />
-                <input style={inputStyle} placeholder="Ej: golpe, ponchada..." value={item.razon_defecto} onChange={e => upd(idx, "razon_defecto", e.target.value)} disabled={!(parseFloat(item.cantidad_defectuosa) > 0)} />
-                <button onClick={() => setItems(p => p.filter((_, i) => i !== idx))} disabled={items.length === 1} style={{ background: "#FEE2E2", border: "none", borderRadius: 8, cursor: "pointer", color: "#B91C1C", fontSize: 14 }}>✕</button>
-              </div>
-              {(item.cantidad_recibida !== "" || item.cantidad_defectuosa !== "") && (
-                <div style={{ fontSize: 11, color: "#059669", marginTop: 2, paddingLeft: 2 }}>→ {efectiva} efectivas entran al almacén en esta línea</div>
-              )}
-            </div>
-          );
-        })}
-        <button onClick={addItem} style={{ width: "100%", padding: "7px", border: "1px dashed #93C5FD", borderRadius: 8, background: "none", color: "#1D4ED8", cursor: "pointer", fontSize: 13, marginBottom: 16 }}>+ Agregar otra medida</button>
-
-        <div style={{ background: "var(--color-background-tertiary)", borderRadius: 10, padding: "12px 16px", marginBottom: 16 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}><span style={{ color: "var(--color-text-secondary)" }}>Total recibido</span><span>{totales.recibida}</span></div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}><span style={{ color: "var(--color-text-secondary)" }}>Total defectuoso</span><span style={{ color: "#B91C1C" }}>{totales.defectuosa}</span></div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: 15, marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--color-border-tertiary)" }}><span>Efectivas en almacén</span><span style={{ color: "#059669" }}>{totales.efectiva}</span></div>
-        </div>
+        <p style={{ fontSize: 11, color: "var(--color-text-secondary)", marginTop: 0, marginBottom: 12 }}>Puedes clasificar ahora mismo o dejarlo para después con el botón "+ Clasificar" en la lista.</p>
+        <LineasClasificacion items={items} setItems={setItems} productos={productos} />
 
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
           <button onClick={onClose} style={{ padding: "9px 20px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
@@ -729,6 +729,157 @@ function ModalLote({ productos, onClose, onSaved }) {
     </div>
   );
 }
+
+function ModalClasificarLote({ lote, productos, onClose, onSaved }) {
+  const [items, setItems] = useState([{ producto_id: "", cantidad: "" }]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const guardar = async () => {
+    const validItems = items.filter(i => i.producto_id && parseFloat(i.cantidad) > 0);
+    if (!validItems.length) return setError("Agrega al menos una línea con producto/medida y cantidad");
+    setLoading(true); setError("");
+    try {
+      await api.clasificarLote(lote.id, { items: validItems.map(i => ({ producto_id: i.producto_id, cantidad: parseFloat(i.cantidad) })) });
+      onSaved();
+    } catch (e) { setError(e.message); } finally { setLoading(false); }
+  };
+
+  return (
+    <div style={overlayStyle}>
+      <div style={{ ...modalBase, maxWidth: 640 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>📦 Clasificar lote {lote.folio}</h2>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)" }}>✕</button>
+        </div>
+        <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 0, marginBottom: 16 }}>
+          Total del lote: {parseFloat(lote.cantidad_total)} · Ya clasificado: {parseFloat(lote.total_clasificado)} · Pendiente: {lote.total_pendiente}
+        </p>
+        {error && <div style={{ background: "#FEE2E2", color: "#B91C1C", borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 12 }}>{error}</div>}
+        <LineasClasificacion items={items} setItems={setItems} productos={productos} />
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+          <button onClick={onClose} style={{ padding: "9px 20px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
+          <button onClick={guardar} disabled={loading} style={{ padding: "9px 24px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>{loading ? "Guardando..." : "Agregar clasificación"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Módulo Lotes: Devolución (solo cantidad total + motivo, sin medida) ──────
+function DevolucionLotes() {
+  const [devoluciones, setDevoluciones] = useState([]);
+  const [lotes, setLotes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState(false);
+
+  const cargar = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [d, l] = await Promise.all([api.devolucionesLotes(), api.lotes()]);
+      setDevoluciones(d.data || []);
+      setLotes(l.data || []);
+    } catch {}
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  return (
+    <div>
+      <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 0, marginBottom: 16 }}>
+        Registra aquí las piezas que se regresan al proveedor después de revisar calidad — solo cantidad total y motivo, sin desglose por medida. No afecta el inventario (esas piezas nunca llegaron a clasificarse).
+      </p>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
+        <button onClick={() => setModal(true)} style={{ padding: "8px 18px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>+ Nueva devolución</button>
+      </div>
+
+      {loading ? <div style={{ textAlign: "center", padding: 40, color: "var(--color-text-secondary)" }}>Cargando...</div> :
+        devoluciones.length === 0
+          ? <div style={{ textAlign: "center", padding: 60, color: "var(--color-text-secondary)" }}>No hay devoluciones registradas todavía.</div>
+          : (
+            <div style={{ background: "var(--color-background-secondary)", borderRadius: 12, border: "1px solid var(--color-border-tertiary)", overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead><tr style={{ background: "var(--color-background-tertiary)" }}>
+                  {["Lote", "Proveedor", "Fecha devolución", "Cantidad", "Motivo"].map(h =>
+                    <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontWeight: 600, fontSize: 11, color: "var(--color-text-secondary)", textTransform: "uppercase" }}>{h}</th>)}
+                </tr></thead>
+                <tbody>
+                  {devoluciones.map(d => (
+                    <tr key={d.id} style={{ borderTop: "1px solid var(--color-border-tertiary)" }}>
+                      <td style={{ padding: "10px 14px", fontWeight: 600 }}>{d.folio}</td>
+                      <td style={{ padding: "10px 14px", color: "var(--color-text-secondary)" }}>{d.proveedor_nombre || "—"}</td>
+                      <td style={{ padding: "10px 14px" }}>{fmtFecha(d.fecha_devolucion)}</td>
+                      <td style={{ padding: "10px 14px", fontWeight: 700, color: "#B91C1C" }}>{parseFloat(d.cantidad)}</td>
+                      <td style={{ padding: "10px 14px", color: "var(--color-text-secondary)" }}>{d.motivo}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+      }
+
+      {modal && <ModalNuevaDevolucion lotes={lotes} onClose={() => setModal(false)} onSaved={() => { setModal(false); cargar(); }} />}
+    </div>
+  );
+}
+
+function ModalNuevaDevolucion({ lotes, onClose, onSaved }) {
+  const [loteId, setLoteId] = useState("");
+  const [cantidad, setCantidad] = useState("");
+  const [motivo, setMotivo] = useState("");
+  const [fecha, setFecha] = useState(new Date().toISOString().split("T")[0]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const loteSeleccionado = lotes.find(l => l.id === loteId);
+
+  const guardar = async () => {
+    if (!loteId) return setError("Selecciona a qué lote pertenece esta devolución");
+    if (!cantidad || parseFloat(cantidad) <= 0) return setError("La cantidad devuelta debe ser mayor a 0");
+    if (!motivo.trim()) return setError("Indica el motivo de la devolución");
+    setLoading(true); setError("");
+    try {
+      await api.devolverLote(loteId, { cantidad: parseFloat(cantidad), motivo: motivo.trim(), fecha_devolucion: fecha });
+      onSaved();
+    } catch (e) { setError(e.message); } finally { setLoading(false); }
+  };
+
+  return (
+    <div style={overlayStyle}>
+      <div style={{ ...modalBase, maxWidth: 480 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>↩️ Nueva devolución de lote</h2>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)" }}>✕</button>
+        </div>
+        {error && <div style={{ background: "#FEE2E2", color: "#B91C1C", borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 12 }}>{error}</div>}
+
+        <div style={{ marginBottom: 12 }}>
+          <label style={labelStyle}>Lote *</label>
+          <select style={inputStyle} value={loteId} onChange={e => setLoteId(e.target.value)}>
+            <option value="">— Seleccionar lote —</option>
+            {lotes.map(l => <option key={l.id} value={l.id}>{l.folio} · {l.proveedor_nombre || "Sin proveedor"} ({fmtFecha(l.fecha_recepcion)})</option>)}
+          </select>
+          {loteSeleccionado && (
+            <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginTop: 4 }}>
+              Pendiente sin clasificar/devolver en este lote: <strong>{loteSeleccionado.total_pendiente}</strong>
+            </div>
+          )}
+        </div>
+        <div style={{ marginBottom: 12 }}><label style={labelStyle}>Cantidad devuelta *</label><input type="number" min={0} style={inputStyle} placeholder="Ej. 20" value={cantidad} onChange={e => setCantidad(e.target.value)} /></div>
+        <div style={{ marginBottom: 16 }}><label style={labelStyle}>Motivo de la devolución *</label><input style={inputStyle} placeholder='Ej. "doble golpe y seccionadas"' value={motivo} onChange={e => setMotivo(e.target.value)} /></div>
+        <div style={{ marginBottom: 16 }}><label style={labelStyle}>Fecha de devolución</label><input type="date" style={inputStyle} value={fecha} onChange={e => setFecha(e.target.value)} /></div>
+
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+          <button onClick={onClose} style={{ padding: "9px 20px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
+          <button onClick={guardar} disabled={loading} style={{ padding: "9px 24px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>{loading ? "Guardando..." : "Registrar devolución"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 // ─── Módulo Compras ───────────────────────────────────────────────────────────
 function Compras({ onNuevaCompra }) {
@@ -1045,14 +1196,14 @@ function ReporteLlantasPorMes() {
   return (
     <div>
       <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 0, marginBottom: 12 }}>
-        Basado en los lotes registrados en "Recepción de lotes" (no en compras a proveedor).
+        Basado en los lotes registrados en "Lotes → Recepción/Devolución" (no en compras a proveedor).
       </p>
       <FiltroFechas desde={desde} hasta={hasta} setDesde={setDesde} setHasta={setHasta} />
       {loading ? <div style={{ textAlign: "center", padding: 30, color: "var(--color-text-secondary)" }}>Cargando...</div> : (
         <div style={{ background: "var(--color-background-secondary)", borderRadius: 12, border: "1px solid var(--color-border-tertiary)", overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead><tr style={{ background: "var(--color-background-tertiary)" }}>
-              {["Mes", "# Lotes", "Recibidas", "Defectuosas", "Efectivas en almacén"].map(h =>
+              {["Mes", "# Lotes", "Recibidas", "Devueltas", "No devueltas"].map(h =>
                 <th key={h} style={{ padding: "10px 14px", textAlign: h === "Mes" ? "left" : "right", fontWeight: 600, fontSize: 11, color: "var(--color-text-secondary)", textTransform: "uppercase" }}>{h}</th>)}
             </tr></thead>
             <tbody>
@@ -1731,7 +1882,10 @@ const NAV = [
   { id: "catalogo",    icon: "🛞", label: "Catálogo / Cotizar",  permiso: "cotizaciones" },
   { id: "ordenes",     icon: "🔧", label: "Órdenes de servicio", permiso: "ordenes" },
   { id: "inventario",  icon: "📦", label: "Inventario",          permiso: "productos_ver" },
-  { id: "lotes",       icon: "📥", label: "Recepción de lotes",  permiso: "compras" },
+  { id: "lotes",       icon: "📥", label: "Lotes",               permiso: "compras", children: [
+      { id: "lotes_recepcion",  icon: "📦", label: "Recepción de lotes" },
+      { id: "lotes_devolucion", icon: "↩️", label: "Devolución de lotes" },
+  ]},
   { id: "compras",     icon: "🚚", label: "Compras",             permiso: "compras" },
   { id: "gastos",      icon: "💸", label: "Gastos",              permiso: "gastos" },
   { id: "clientes",    icon: "👥", label: "Clientes / CRM",      permiso: "clientes" },
@@ -1739,6 +1893,12 @@ const NAV = [
   { id: "usuarios",    icon: "🔐", label: "Usuarios",            permiso: "todo" },
   { id: "configuracion", icon: "🏢", label: "Configuración",     permiso: "todo" },
 ];
+
+// Lista "plana" de secciones reales (hijos de un grupo, o el ítem mismo si no
+// tiene hijos) — se usa para validar permisos y resolver título/sección activa.
+const NAV_HOJAS = NAV.flatMap(item => item.children
+  ? item.children.map(c => ({ ...c, permiso: item.permiso }))
+  : [item]);
 
 const puedeVer = (permisos, clave) => {
   if (!permisos) return true; // sin objeto de permisos en absoluto: compatibilidad total (no debería pasar en la práctica)
@@ -1856,6 +2016,9 @@ function AppPrivada() {
   const [sidebar, setSidebar] = useState(true);       // colapsar/expandir en DESKTOP
   const [menuAbierto, setMenuAbierto] = useState(false); // abrir/cerrar drawer en MOVIL
   const [productos, setProductos] = useState([]);
+  const grupoDe = (id) => NAV.find(item => item.children?.some(c => c.id === id));
+  const [grupoAbierto, setGrupoAbierto] = useState(() => grupoDe("dashboard")?.id || null);
+  const toggleGrupo = (id) => setGrupoAbierto(prev => prev === id ? null : id);
 
   useEffect(() => {
     if (user) api.productos().then(r => setProductos(r.data || [])).catch(() => {});
@@ -1872,9 +2035,10 @@ function AppPrivada() {
 
   const permisos = user.permisos || {};
   const navVisible = NAV.filter(item => puedeVer(permisos, item.permiso));
+  const hojasVisibles = NAV_HOJAS.filter(item => puedeVer(permisos, item.permiso));
   // Si la sección activa ya no es visible para este usuario (ej. cambio de rol), saltar a la primera permitida.
-  const seccionActiva = navVisible.find(n => n.id === seccion) ? seccion : (navVisible[0]?.id || "dashboard");
-  const titulo = navVisible.find(n => n.id === seccionActiva)?.label || seccionActiva;
+  const seccionActiva = hojasVisibles.find(n => n.id === seccion) ? seccion : (hojasVisibles[0]?.id || "dashboard");
+  const titulo = hojasVisibles.find(n => n.id === seccionActiva)?.label || seccionActiva;
   const irASeccion = (id) => { setSeccion(id); setMenuAbierto(false); };
 
   return (
@@ -1907,13 +2071,35 @@ function AppPrivada() {
             : <button onClick={() => setSidebar(!sidebar)} style={{ marginLeft: "auto", background: "none", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: 16, padding: 2 }}>{sidebar ? "◂" : "▸"}</button>}
         </div>
         <nav style={{ flex: 1, padding: "10px 0", overflowY: "auto" }}>
-          {navVisible.map(item => (
-            <button key={item.id} onClick={() => irASeccion(item.id)}
-              style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: (sidebar || isMobile) ? "12px 16px" : "10px 0", justifyContent: (sidebar || isMobile) ? "flex-start" : "center", background: seccionActiva === item.id ? "rgba(29,78,216,0.35)" : "none", borderLeft: seccionActiva === item.id ? "3px solid #60A5FA" : "3px solid transparent", border: "none", cursor: "pointer", color: seccionActiva === item.id ? "#fff" : "rgba(255,255,255,0.55)", fontSize: 14, fontWeight: seccionActiva === item.id ? 600 : 400, transition: "all 0.15s", textAlign: "left" }}>
-              <span style={{ fontSize: 17, flexShrink: 0 }}>{item.icon}</span>
-              {(sidebar || isMobile) && <span style={{ whiteSpace: "nowrap" }}>{item.label}</span>}
-            </button>
-          ))}
+          {navVisible.map(item => {
+            if (item.children) {
+              const expandido = grupoAbierto === item.id || item.children.some(c => c.id === seccionActiva);
+              return (
+                <div key={item.id}>
+                  <button onClick={() => toggleGrupo(item.id)}
+                    style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: (sidebar || isMobile) ? "12px 16px" : "10px 0", justifyContent: (sidebar || isMobile) ? "flex-start" : "center", background: "none", border: "none", cursor: "pointer", color: expandido ? "#fff" : "rgba(255,255,255,0.55)", fontSize: 14, fontWeight: expandido ? 600 : 400, transition: "all 0.15s", textAlign: "left" }}>
+                    <span style={{ fontSize: 17, flexShrink: 0 }}>{item.icon}</span>
+                    {(sidebar || isMobile) && <span style={{ whiteSpace: "nowrap", flex: 1 }}>{item.label}</span>}
+                    {(sidebar || isMobile) && <span style={{ fontSize: 11, opacity: 0.5 }}>{expandido ? "▾" : "▸"}</span>}
+                  </button>
+                  {expandido && (sidebar || isMobile) && item.children.map(child => (
+                    <button key={child.id} onClick={() => irASeccion(child.id)}
+                      style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 16px 10px 36px", background: seccionActiva === child.id ? "rgba(29,78,216,0.35)" : "none", borderLeft: seccionActiva === child.id ? "3px solid #60A5FA" : "3px solid transparent", border: "none", cursor: "pointer", color: seccionActiva === child.id ? "#fff" : "rgba(255,255,255,0.5)", fontSize: 13, fontWeight: seccionActiva === child.id ? 600 : 400, transition: "all 0.15s", textAlign: "left" }}>
+                      <span style={{ fontSize: 14, flexShrink: 0 }}>{child.icon}</span>
+                      <span style={{ whiteSpace: "nowrap" }}>{child.label}</span>
+                    </button>
+                  ))}
+                </div>
+              );
+            }
+            return (
+              <button key={item.id} onClick={() => irASeccion(item.id)}
+                style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: (sidebar || isMobile) ? "12px 16px" : "10px 0", justifyContent: (sidebar || isMobile) ? "flex-start" : "center", background: seccionActiva === item.id ? "rgba(29,78,216,0.35)" : "none", borderLeft: seccionActiva === item.id ? "3px solid #60A5FA" : "3px solid transparent", border: "none", cursor: "pointer", color: seccionActiva === item.id ? "#fff" : "rgba(255,255,255,0.55)", fontSize: 14, fontWeight: seccionActiva === item.id ? 600 : 400, transition: "all 0.15s", textAlign: "left" }}>
+                <span style={{ fontSize: 17, flexShrink: 0 }}>{item.icon}</span>
+                {(sidebar || isMobile) && <span style={{ whiteSpace: "nowrap" }}>{item.label}</span>}
+              </button>
+            );
+          })}
         </nav>
         <div style={{ padding: (sidebar || isMobile) ? "12px 16px" : "12px 8px", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1957,7 +2143,8 @@ function AppPrivada() {
         {seccionActiva === "catalogo"    && <Catalogo />}
         {seccionActiva === "ordenes"     && <Ordenes />}
         {seccionActiva === "inventario"  && <Inventario onNuevoProducto={() => setModal("producto")} />}
-        {seccionActiva === "lotes"       && <Lotes />}
+        {seccionActiva === "lotes_recepcion"  && <RecepcionLotes />}
+        {seccionActiva === "lotes_devolucion" && <DevolucionLotes />}
         {seccionActiva === "compras"     && <Compras onNuevaCompra={() => setModal("compra")} />}
         {seccionActiva === "gastos"      && <Gastos onNuevoGasto={() => setModal("gasto")} />}
         {seccionActiva === "clientes"    && <Clientes />}

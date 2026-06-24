@@ -99,7 +99,10 @@ r.put ('/negocio',                        authenticate, authorize('admin'), nego
 
 // ── Lotes de llantas (recepción, clasificación e inspección) ───────
 r.get ('/lotes',                          authenticate, lotes.listar);
+r.get ('/lotes-devoluciones',             authenticate, lotes.listarDevoluciones);
 r.get ('/lotes/:id',                      authenticate, lotes.obtener);
 r.post('/lotes',                          authenticate, lotes.crear);
+r.post('/lotes/:id/clasificar',           authenticate, lotes.clasificar);
+r.post('/lotes/:id/devolucion',           authenticate, lotes.registrarDevolucion);
 
 export default r;

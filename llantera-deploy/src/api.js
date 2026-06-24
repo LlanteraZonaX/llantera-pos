@@ -123,13 +123,19 @@ export const api = {
   actualizarNegocio: (data) =>
     fetch(`${BASE}/negocio`, { method: 'PUT', headers: headers(), body: JSON.stringify(data) }).then(handle),
 
-  // Lotes de llantas (recepción e inspección)
+  // Lotes de llantas (recepción, clasificación y devolución)
   lotes: (params = '') =>
     fetch(`${BASE}/lotes?${params}`, { headers: headers() }).then(handle),
   obtenerLote: (id) =>
     fetch(`${BASE}/lotes/${id}`, { headers: headers() }).then(handle),
   crearLote: (data) =>
     fetch(`${BASE}/lotes`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle),
+  clasificarLote: (id, data) =>
+    fetch(`${BASE}/lotes/${id}/clasificar`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle),
+  devolverLote: (id, data) =>
+    fetch(`${BASE}/lotes/${id}/devolucion`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle),
+  devolucionesLotes: (params = '') =>
+    fetch(`${BASE}/lotes-devoluciones?${params}`, { headers: headers() }).then(handle),
 
   // Reportes
   reporteVentas: (params = '') =>
