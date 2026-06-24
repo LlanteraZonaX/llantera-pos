@@ -122,8 +122,15 @@ const inputStyle = { width: "100%", padding: "8px 12px", border: "1px solid var(
 const labelStyle = { display: "block", fontSize: 11, fontWeight: 600, color: "var(--color-text-secondary)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" };
 
 // ─── Modal Nuevo Producto ─────────────────────────────────────────────────────
-function ModalProducto({ onClose, onSaved }) {
-  const [form, setForm] = useState({ nombre: "", medida: "", marca: "", categoria_id: 1, precio_compra: "", precio_venta: "", stock_actual: "", stock_minimo: "", es_servicio: false });
+function ModalProducto({ producto, onClose, onSaved }) {
+  const esEdicion = !!producto;
+  const [form, setForm] = useState(producto ? {
+    nombre: producto.nombre || "", medida: producto.medida || "", marca: producto.marca || "",
+    categoria_id: producto.categoria_id || 1,
+    precio_compra: producto.precio_compra ?? "", precio_venta: producto.precio_venta ?? "",
+    stock_actual: producto.stock_actual ?? "", stock_minimo: producto.stock_minimo ?? "",
+    es_servicio: !!producto.es_servicio,
+  } : { nombre: "", medida: "", marca: "", categoria_id: 1, precio_compra: "", precio_venta: "", stock_actual: "", stock_minimo: "", es_servicio: false });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }));
@@ -131,8 +138,10 @@ function ModalProducto({ onClose, onSaved }) {
   const guardar = async () => {
     if (!form.nombre || !form.precio_venta) return setError("Nombre y precio de venta son requeridos");
     setLoading(true); setError("");
+    const datos = { ...form, precio_compra: parseFloat(form.precio_compra)||0, precio_venta: parseFloat(form.precio_venta)||0, stock_actual: parseFloat(form.stock_actual)||0, stock_minimo: parseFloat(form.stock_minimo)||0 };
     try {
-      await api.crearProducto({ ...form, precio_compra: parseFloat(form.precio_compra)||0, precio_venta: parseFloat(form.precio_venta)||0, stock_actual: parseFloat(form.stock_actual)||0, stock_minimo: parseFloat(form.stock_minimo)||0 });
+      if (esEdicion) await api.actualizarProducto(producto.id, datos);
+      else await api.crearProducto(datos);
       onSaved();
     } catch (e) { setError(e.message); } finally { setLoading(false); }
   };
@@ -141,7 +150,7 @@ function ModalProducto({ onClose, onSaved }) {
     <div style={overlayStyle}>
       <div style={{ ...modalBase, maxWidth: 520 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-          <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>📦 Nuevo producto / llanta</h2>
+          <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>📦 {esEdicion ? "Editar producto / llanta" : "Nuevo producto / llanta"}</h2>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)" }}>✕</button>
         </div>
         {error && <div style={{ background: "#FEE2E2", color: "#B91C1C", borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 12 }}>{error}</div>}
@@ -182,7 +191,7 @@ function ModalProducto({ onClose, onSaved }) {
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 20 }}>
           <button onClick={onClose} style={{ padding: "9px 20px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
           <button onClick={guardar} disabled={loading} style={{ padding: "9px 24px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
-            {loading ? "Guardando..." : "Guardar producto"}
+            {loading ? "Guardando..." : esEdicion ? "Guardar cambios" : "Guardar producto"}
           </button>
         </div>
       </div>
@@ -366,6 +375,7 @@ function Inventario({ onNuevoProducto, filtroStockBajoInicial = false }) {
   const [loading, setLoading] = useState(true);
   const [fotoModal, setFotoModal] = useState(null); // producto seleccionado
   const [soloStockBajo, setSoloStockBajo] = useState(filtroStockBajoInicial);
+  const [editando, setEditando] = useState(null); // producto que se está editando
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -395,14 +405,14 @@ function Inventario({ onNuevoProducto, filtroStockBajoInicial = false }) {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr style={{ background: "var(--color-background-tertiary)" }}>
-                {["Foto", "Nombre", "Medida", "Marca", "Precio venta", "Stock", "Estado"].map(h =>
+                {["Foto", "Nombre", "Medida", "Marca", "Precio venta", "Stock", "Estado", ""].map(h =>
                   <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontWeight: 600, fontSize: 11, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{h}</th>
                 )}
               </tr>
             </thead>
             <tbody>
               {productosVisibles.length === 0
-                ? <tr><td colSpan={7} style={{ padding: 40, textAlign: "center", color: "var(--color-text-secondary)" }}>{soloStockBajo ? "No hay productos con stock bajo 🎉" : "No hay productos. ¡Agrega tu primer producto!"}</td></tr>
+                ? <tr><td colSpan={8} style={{ padding: 40, textAlign: "center", color: "var(--color-text-secondary)" }}>{soloStockBajo ? "No hay productos con stock bajo 🎉" : "No hay productos. ¡Agrega tu primer producto!"}</td></tr>
                 : productosVisibles.map(p => (
                   <tr key={p.id} style={{ borderTop: "1px solid var(--color-border-tertiary)" }}>
                     <td style={{ padding: "8px 14px" }}>
@@ -420,6 +430,9 @@ function Inventario({ onNuevoProducto, filtroStockBajoInicial = false }) {
                         ? <span style={{ background: "#FEE2E2", color: "#B91C1C", fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20 }}>Stock bajo</span>
                         : <span style={{ background: "#D1FAE5", color: "#065F46", fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20 }}>OK</span>}
                     </td>
+                    <td style={{ padding: "8px 14px" }}>
+                      <button onClick={() => setEditando(p)} style={{ padding: "5px 12px", background: "var(--color-background-tertiary)", border: "1px solid var(--color-border-secondary)", borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>✏️ Editar</button>
+                    </td>
                   </tr>
                 ))}
             </tbody>
@@ -427,6 +440,7 @@ function Inventario({ onNuevoProducto, filtroStockBajoInicial = false }) {
         </div>
       )}
       {fotoModal && <ModalFotosProducto producto={fotoModal} onClose={() => setFotoModal(null)} onSaved={() => { setFotoModal(null); cargar(); }} />}
+      {editando && <ModalProducto producto={editando} onClose={() => setEditando(null)} onSaved={() => { setEditando(null); cargar(); }} />}
     </div>
   );
 }
