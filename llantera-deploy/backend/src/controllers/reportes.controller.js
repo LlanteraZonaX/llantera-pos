@@ -74,20 +74,117 @@ export const ventasPorPeriodo = async (req, res) => {
     const { desde, hasta, agrupacion = 'dia' } = req.query;
     const negocio_id = req.user.negocio_id;
     const formato = agrupacion === 'mes' ? 'YYYY-MM' : agrupacion === 'semana' ? 'IYYY-IW' : 'YYYY-MM-DD';
+    // Default: últimos 30 días, calculado en JS (antes se mandaba el texto
+    // 'NOW() - INTERVAL...' como parámetro literal, lo cual rompía la consulta).
+    const hastaVal = hasta || new Date().toISOString().slice(0, 10);
+    const desdeVal = desde || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
     const { rows } = await query(
       `SELECT TO_CHAR(fecha, $1) as periodo,
               SUM(total) as total, COUNT(*) as cantidad,
               SUM(total) FILTER (WHERE metodo_pago='efectivo') as efectivo,
-              SUM(total) FILTER (WHERE metodo_pago='tarjeta') as tarjeta
+              SUM(total) FILTER (WHERE metodo_pago='tarjeta') as tarjeta,
+              SUM(total) FILTER (WHERE metodo_pago='transferencia') as transferencia
        FROM ventas
        WHERE fecha BETWEEN $2 AND $3 AND estado = 'pagada' AND negocio_id = $4
        GROUP BY periodo ORDER BY periodo`,
-      [formato, desde || 'NOW() - INTERVAL \'30 days\'', hasta || 'NOW()', negocio_id]
+      [formato, desdeVal, hastaVal, negocio_id]
     );
-    res.json(rows);
+    res.json({ data: rows, desde: desdeVal, hasta: hastaVal });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'Error al obtener reporte' });
+  }
+};
+
+// Producto más vendido — por unidades y por ingresos, en un rango de fechas
+export const productoMasVendido = async (req, res) => {
+  try {
+    const { desde, hasta, limit = 20 } = req.query;
+    const negocio_id = req.user.negocio_id;
+    const hastaVal = hasta || new Date().toISOString().slice(0, 10);
+    const desdeVal = desde || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+    const { rows } = await query(
+      `SELECT p.id, p.nombre, p.medida, p.marca,
+              SUM(vd.cantidad) as unidades_vendidas,
+              SUM(vd.subtotal) as ingresos,
+              COUNT(DISTINCT v.id) as num_ventas
+       FROM ventas_detalle vd
+       JOIN ventas v ON vd.venta_id = v.id
+       JOIN productos p ON vd.producto_id = p.id
+       WHERE v.fecha::date BETWEEN $1 AND $2 AND v.estado = 'pagada' AND v.negocio_id = $3
+       GROUP BY p.id, p.nombre, p.medida, p.marca
+       ORDER BY unidades_vendidas DESC
+       LIMIT $4`,
+      [desdeVal, hastaVal, negocio_id, limit]
+    );
+    res.json({ data: rows, desde: desdeVal, hasta: hastaVal });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al obtener producto más vendido' });
+  }
+};
+
+// Cotizaciones por vendedor — totales, convertidas a venta y tasa de conversión
+export const cotizacionesPorVendedor = async (req, res) => {
+  try {
+    const { desde, hasta } = req.query;
+    const negocio_id = req.user.negocio_id;
+    const hastaVal = hasta || new Date().toISOString().slice(0, 10);
+    const desdeVal = desde || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+    const { rows } = await query(
+      `SELECT u.id as vendedor_id, u.nombre as vendedor_nombre,
+              COUNT(*) as total_cotizaciones,
+              COALESCE(SUM(c.total), 0) as monto_cotizado,
+              COUNT(*) FILTER (WHERE c.estado = 'convertida') as convertidas,
+              COALESCE(SUM(c.total) FILTER (WHERE c.estado = 'convertida'), 0) as monto_convertido
+       FROM cotizaciones c
+       JOIN usuarios u ON c.vendedor_id = u.id
+       WHERE c.created_at::date BETWEEN $1 AND $2 AND c.negocio_id = $3
+       GROUP BY u.id, u.nombre
+       ORDER BY total_cotizaciones DESC`,
+      [desdeVal, hastaVal, negocio_id]
+    );
+
+    const data = rows.map(r => ({
+      ...r,
+      tasa_conversion: r.total_cotizaciones > 0
+        ? ((parseInt(r.convertidas) / parseInt(r.total_cotizaciones)) * 100).toFixed(1)
+        : '0.0',
+    }));
+    res.json({ data, desde: desdeVal, hasta: hastaVal });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al obtener cotizaciones por vendedor' });
+  }
+};
+
+// Recepción de llantas por mes — basado en los lotes registrados
+// (recibidas, defectuosas y las que realmente entraron a almacén)
+export const llantasPorMes = async (req, res) => {
+  try {
+    const { desde, hasta } = req.query;
+    const negocio_id = req.user.negocio_id;
+    const hastaVal = hasta || new Date().toISOString().slice(0, 10);
+    const desdeVal = desde || new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+    const { rows } = await query(
+      `SELECT TO_CHAR(fecha_recepcion, 'YYYY-MM') as mes,
+              COUNT(*) as num_lotes,
+              COALESCE(SUM(cantidad_total), 0) as total_recibidas,
+              COALESCE(SUM(cantidad_defectuosa), 0) as total_defectuosas,
+              COALESCE(SUM(cantidad_efectiva), 0) as total_efectivas
+       FROM lotes_llantas
+       WHERE fecha_recepcion BETWEEN $1 AND $2 AND negocio_id = $3
+       GROUP BY mes ORDER BY mes`,
+      [desdeVal, hastaVal, negocio_id]
+    );
+    res.json({ data: rows, desde: desdeVal, hasta: hastaVal });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al obtener recepción de llantas por mes' });
   }
 };
 

@@ -575,6 +575,161 @@ function Ordenes() {
   );
 }
 
+// ─── Módulo Lotes de llantas (recepción + clasificación + defectuosas) ────────
+function Lotes() {
+  const [lotes, setLotes] = useState([]);
+  const [productos, setProductos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState(false);
+
+  const cargar = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [l, p] = await Promise.all([api.lotes(), api.productos()]);
+      setLotes(l.data || []);
+      setProductos((p.data || []).filter(x => !x.es_servicio));
+    } catch {}
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  return (
+    <div>
+      <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 0, marginBottom: 16 }}>
+        Registra cada lote físico que llega, clasifícalo por medida y marca las piezas defectuosas. El sistema suma automáticamente al almacén solo las piezas efectivas (recibidas − defectuosas).
+      </p>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
+        <button onClick={() => setModal(true)} style={{ padding: "8px 18px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>+ Nuevo lote</button>
+      </div>
+
+      {loading ? <div style={{ textAlign: "center", padding: 40, color: "var(--color-text-secondary)" }}>Cargando...</div> :
+        lotes.length === 0
+          ? <div style={{ textAlign: "center", padding: 60, color: "var(--color-text-secondary)" }}>No hay lotes registrados todavía.</div>
+          : lotes.map(l => (
+            <div key={l.id} style={{ background: "var(--color-background-secondary)", borderRadius: 12, padding: "16px 20px", border: "1px solid var(--color-border-tertiary)", marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>{l.folio}</div>
+                <div style={{ color: "var(--color-text-secondary)", fontSize: 13, marginTop: 3 }}>{l.proveedor_nombre || l.proveedor_catalogo_nombre || "Sin proveedor"}</div>
+                <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2 }}>Recibido: {fmtFecha(l.fecha_recepcion)}</div>
+              </div>
+              <div style={{ display: "flex", gap: 18, textAlign: "right" }}>
+                <div>
+                  <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Recibidas</div>
+                  <div style={{ fontWeight: 700, fontSize: 15 }}>{parseFloat(l.cantidad_total)}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Defectuosas</div>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: parseFloat(l.cantidad_defectuosa) > 0 ? "#B91C1C" : "var(--color-text-primary)" }}>{parseFloat(l.cantidad_defectuosa)}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Efectivas en almacén</div>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: "#059669" }}>{parseFloat(l.cantidad_efectiva)}</div>
+                </div>
+              </div>
+            </div>
+          ))
+      }
+
+      {modal && <ModalLote productos={productos} onClose={() => setModal(false)} onSaved={() => { setModal(false); cargar(); }} />}
+    </div>
+  );
+}
+
+function ModalLote({ productos, onClose, onSaved }) {
+  const [form, setForm] = useState({ proveedor_nombre: "", fecha_recepcion: new Date().toISOString().split("T")[0], notas: "" });
+  const [items, setItems] = useState([{ producto_id: "", cantidad_recibida: "", cantidad_defectuosa: "", razon_defecto: "" }]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const addItem = () => setItems(p => [...p, { producto_id: "", cantidad_recibida: "", cantidad_defectuosa: "", razon_defecto: "" }]);
+  const upd = (idx, k, v) => setItems(p => { const a = [...p]; a[idx] = { ...a[idx], [k]: v }; return a; });
+
+  const totales = items.reduce((acc, i) => {
+    const recibida = parseFloat(i.cantidad_recibida) || 0;
+    const defectuosa = parseFloat(i.cantidad_defectuosa) || 0;
+    return { recibida: acc.recibida + recibida, defectuosa: acc.defectuosa + defectuosa, efectiva: acc.efectiva + (recibida - defectuosa) };
+  }, { recibida: 0, defectuosa: 0, efectiva: 0 });
+
+  const guardar = async () => {
+    const validItems = items.filter(i => i.producto_id && parseFloat(i.cantidad_recibida) > 0);
+    if (!validItems.length) return setError("Agrega al menos una línea con producto/medida y cantidad recibida");
+    for (const i of validItems) {
+      if ((parseFloat(i.cantidad_defectuosa) || 0) > parseFloat(i.cantidad_recibida)) {
+        return setError("La cantidad defectuosa no puede ser mayor a la recibida en ninguna línea");
+      }
+    }
+    setLoading(true); setError("");
+    try {
+      await api.crearLote({
+        ...form,
+        items: validItems.map(i => ({
+          producto_id: i.producto_id,
+          cantidad_recibida: parseFloat(i.cantidad_recibida),
+          cantidad_defectuosa: parseFloat(i.cantidad_defectuosa) || 0,
+          razon_defecto: i.razon_defecto || null,
+        })),
+      });
+      onSaved();
+    } catch (e) { setError(e.message); } finally { setLoading(false); }
+  };
+
+  return (
+    <div style={overlayStyle}>
+      <div style={{ ...modalBase, maxWidth: 760 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>📥 Nuevo lote de llantas</h2>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)" }}>✕</button>
+        </div>
+        {error && <div style={{ background: "#FEE2E2", color: "#B91C1C", borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 12 }}>{error}</div>}
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+          <div><label style={labelStyle}>Proveedor</label><input style={inputStyle} placeholder="Nombre del proveedor" value={form.proveedor_nombre} onChange={e => setForm(p => ({ ...p, proveedor_nombre: e.target.value }))} /></div>
+          <div><label style={labelStyle}>Fecha de recepción *</label><input type="date" style={inputStyle} value={form.fecha_recepcion} onChange={e => setForm(p => ({ ...p, fecha_recepcion: e.target.value }))} /></div>
+        </div>
+        <div><label style={labelStyle}>Notas</label><input style={{ ...inputStyle, marginBottom: 16 }} placeholder="Observaciones del lote..." value={form.notas} onChange={e => setForm(p => ({ ...p, notas: e.target.value }))} /></div>
+
+        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>Clasificación por medida / producto</div>
+        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1.4fr 32px", gap: 6, marginBottom: 6, fontSize: 11, color: "var(--color-text-secondary)", fontWeight: 600 }}>
+          <div>Producto / medida</div><div>Recibidas</div><div>Defectuosas</div><div>Motivo del defecto</div><div></div>
+        </div>
+        {items.map((item, idx) => {
+          const efectiva = (parseFloat(item.cantidad_recibida) || 0) - (parseFloat(item.cantidad_defectuosa) || 0);
+          return (
+            <div key={idx} style={{ marginBottom: 8 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1.4fr 32px", gap: 6 }}>
+                <select style={inputStyle} value={item.producto_id} onChange={e => upd(idx, "producto_id", e.target.value)}>
+                  <option value="">— Seleccionar producto/medida —</option>
+                  {(productos || []).map(p => <option key={p.id} value={p.id}>{p.nombre}{p.medida ? ` (${p.medida})` : ""}</option>)}
+                </select>
+                <input type="number" min={0} style={inputStyle} placeholder="Cant." value={item.cantidad_recibida} onChange={e => upd(idx, "cantidad_recibida", e.target.value)} />
+                <input type="number" min={0} style={inputStyle} placeholder="0" value={item.cantidad_defectuosa} onChange={e => upd(idx, "cantidad_defectuosa", e.target.value)} />
+                <input style={inputStyle} placeholder="Ej: golpe, ponchada..." value={item.razon_defecto} onChange={e => upd(idx, "razon_defecto", e.target.value)} disabled={!(parseFloat(item.cantidad_defectuosa) > 0)} />
+                <button onClick={() => setItems(p => p.filter((_, i) => i !== idx))} disabled={items.length === 1} style={{ background: "#FEE2E2", border: "none", borderRadius: 8, cursor: "pointer", color: "#B91C1C", fontSize: 14 }}>✕</button>
+              </div>
+              {(item.cantidad_recibida !== "" || item.cantidad_defectuosa !== "") && (
+                <div style={{ fontSize: 11, color: "#059669", marginTop: 2, paddingLeft: 2 }}>→ {efectiva} efectivas entran al almacén en esta línea</div>
+              )}
+            </div>
+          );
+        })}
+        <button onClick={addItem} style={{ width: "100%", padding: "7px", border: "1px dashed #93C5FD", borderRadius: 8, background: "none", color: "#1D4ED8", cursor: "pointer", fontSize: 13, marginBottom: 16 }}>+ Agregar otra medida</button>
+
+        <div style={{ background: "var(--color-background-tertiary)", borderRadius: 10, padding: "12px 16px", marginBottom: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}><span style={{ color: "var(--color-text-secondary)" }}>Total recibido</span><span>{totales.recibida}</span></div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}><span style={{ color: "var(--color-text-secondary)" }}>Total defectuoso</span><span style={{ color: "#B91C1C" }}>{totales.defectuosa}</span></div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: 15, marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--color-border-tertiary)" }}><span>Efectivas en almacén</span><span style={{ color: "#059669" }}>{totales.efectiva}</span></div>
+        </div>
+
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+          <button onClick={onClose} style={{ padding: "9px 20px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
+          <button onClick={guardar} disabled={loading} style={{ padding: "9px 24px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>{loading ? "Guardando..." : "Guardar lote"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Módulo Compras ───────────────────────────────────────────────────────────
 function Compras({ onNuevaCompra }) {
   const [compras, setCompras] = useState([]);
@@ -719,6 +874,235 @@ function ModalCliente({ onClose, onSaved }) {
 }
 
 // ─── Gestión de Usuarios (solo admin) ─────────────────────────────────────────
+// ─── Módulo Reportes ──────────────────────────────────────────────────────────
+const hoyISO = () => new Date().toISOString().split("T")[0];
+const haceDiasISO = (dias) => new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+
+function FiltroFechas({ desde, hasta, setDesde, setHasta, agrupacion, setAgrupacion }) {
+  const isMobile = useIsMobile();
+  return (
+    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 16 }}>
+      <div><label style={labelStyle}>Del</label><input type="date" style={{ ...inputStyle, width: isMobile ? 140 : 160 }} value={desde} onChange={e => setDesde(e.target.value)} /></div>
+      <div><label style={labelStyle}>Al</label><input type="date" style={{ ...inputStyle, width: isMobile ? 140 : 160 }} value={hasta} onChange={e => setHasta(e.target.value)} /></div>
+      {setAgrupacion && (
+        <div><label style={labelStyle}>Agrupar por</label>
+          <select style={{ ...inputStyle, width: 130 }} value={agrupacion} onChange={e => setAgrupacion(e.target.value)}>
+            <option value="dia">Día</option>
+            <option value="semana">Semana</option>
+            <option value="mes">Mes</option>
+          </select>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReporteVentas() {
+  const [desde, setDesde] = useState(haceDiasISO(30));
+  const [hasta, setHasta] = useState(hoyISO());
+  const [agrupacion, setAgrupacion] = useState("dia");
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    api.reporteVentas(`desde=${desde}&hasta=${hasta}&agrupacion=${agrupacion}`)
+      .then(r => { setData(r.data || []); setLoading(false); }).catch(() => setLoading(false));
+  }, [desde, hasta, agrupacion]);
+
+  const totalGeneral = data.reduce((s, d) => s + parseFloat(d.total || 0), 0);
+
+  return (
+    <div>
+      <FiltroFechas desde={desde} hasta={hasta} setDesde={setDesde} setHasta={setHasta} agrupacion={agrupacion} setAgrupacion={setAgrupacion} />
+      {loading ? <div style={{ textAlign: "center", padding: 30, color: "var(--color-text-secondary)" }}>Cargando...</div> : (
+        <div style={{ background: "var(--color-background-secondary)", borderRadius: 12, border: "1px solid var(--color-border-tertiary)", overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead><tr style={{ background: "var(--color-background-tertiary)" }}>
+              {["Periodo", "# Ventas", "Efectivo", "Tarjeta", "Transferencia", "Total"].map(h =>
+                <th key={h} style={{ padding: "10px 14px", textAlign: h === "Periodo" ? "left" : "right", fontWeight: 600, fontSize: 11, color: "var(--color-text-secondary)", textTransform: "uppercase" }}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {data.map(d => (
+                <tr key={d.periodo} style={{ borderTop: "1px solid var(--color-border-tertiary)" }}>
+                  <td style={{ padding: "10px 14px" }}>{d.periodo}</td>
+                  <td style={{ padding: "10px 14px", textAlign: "right" }}>{d.cantidad}</td>
+                  <td style={{ padding: "10px 14px", textAlign: "right" }}>{fmt(d.efectivo)}</td>
+                  <td style={{ padding: "10px 14px", textAlign: "right" }}>{fmt(d.tarjeta)}</td>
+                  <td style={{ padding: "10px 14px", textAlign: "right" }}>{fmt(d.transferencia)}</td>
+                  <td style={{ padding: "10px 14px", textAlign: "right", fontWeight: 700, color: "#1D4ED8" }}>{fmt(d.total)}</td>
+                </tr>
+              ))}
+              {!data.length && <tr><td colSpan={6} style={{ padding: 30, textAlign: "center", color: "var(--color-text-secondary)" }}>Sin ventas en este rango</td></tr>}
+            </tbody>
+            {!!data.length && <tfoot><tr style={{ borderTop: "2px solid var(--color-border-tertiary)" }}>
+              <td colSpan={5} style={{ padding: "10px 14px", fontWeight: 700, textAlign: "right" }}>Total del periodo</td>
+              <td style={{ padding: "10px 14px", fontWeight: 700, textAlign: "right", color: "#1D4ED8" }}>{fmt(totalGeneral)}</td>
+            </tr></tfoot>}
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReporteProductoMasVendido() {
+  const [desde, setDesde] = useState(haceDiasISO(30));
+  const [hasta, setHasta] = useState(hoyISO());
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    api.reporteProductoMasVendido(`desde=${desde}&hasta=${hasta}&limit=30`)
+      .then(r => { setData(r.data || []); setLoading(false); }).catch(() => setLoading(false));
+  }, [desde, hasta]);
+
+  return (
+    <div>
+      <FiltroFechas desde={desde} hasta={hasta} setDesde={setDesde} setHasta={setHasta} />
+      {loading ? <div style={{ textAlign: "center", padding: 30, color: "var(--color-text-secondary)" }}>Cargando...</div> : (
+        <div style={{ background: "var(--color-background-secondary)", borderRadius: 12, border: "1px solid var(--color-border-tertiary)", overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead><tr style={{ background: "var(--color-background-tertiary)" }}>
+              {["#", "Producto", "Medida", "Unidades vendidas", "Ingresos", "# Ventas"].map(h =>
+                <th key={h} style={{ padding: "10px 14px", textAlign: (h === "Producto" || h === "Medida") ? "left" : "right", fontWeight: 600, fontSize: 11, color: "var(--color-text-secondary)", textTransform: "uppercase" }}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {data.map((d, i) => (
+                <tr key={d.id} style={{ borderTop: "1px solid var(--color-border-tertiary)" }}>
+                  <td style={{ padding: "10px 14px", color: "var(--color-text-secondary)" }}>{i + 1}</td>
+                  <td style={{ padding: "10px 14px", fontWeight: 600 }}>{d.nombre}</td>
+                  <td style={{ padding: "10px 14px", color: "var(--color-text-secondary)" }}>{d.medida || "—"}</td>
+                  <td style={{ padding: "10px 14px", textAlign: "right", fontWeight: 700 }}>{parseFloat(d.unidades_vendidas)}</td>
+                  <td style={{ padding: "10px 14px", textAlign: "right", color: "#1D4ED8" }}>{fmt(d.ingresos)}</td>
+                  <td style={{ padding: "10px 14px", textAlign: "right" }}>{d.num_ventas}</td>
+                </tr>
+              ))}
+              {!data.length && <tr><td colSpan={6} style={{ padding: 30, textAlign: "center", color: "var(--color-text-secondary)" }}>Sin ventas en este rango</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReporteCotizacionesPorVendedor() {
+  const [desde, setDesde] = useState(haceDiasISO(30));
+  const [hasta, setHasta] = useState(hoyISO());
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    api.reporteCotizacionesVendedor(`desde=${desde}&hasta=${hasta}`)
+      .then(r => { setData(r.data || []); setLoading(false); }).catch(() => setLoading(false));
+  }, [desde, hasta]);
+
+  return (
+    <div>
+      <FiltroFechas desde={desde} hasta={hasta} setDesde={setDesde} setHasta={setHasta} />
+      {loading ? <div style={{ textAlign: "center", padding: 30, color: "var(--color-text-secondary)" }}>Cargando...</div> : (
+        <div style={{ background: "var(--color-background-secondary)", borderRadius: 12, border: "1px solid var(--color-border-tertiary)", overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead><tr style={{ background: "var(--color-background-tertiary)" }}>
+              {["Vendedor", "Cotizaciones", "Monto cotizado", "Convertidas", "Monto convertido", "% Conversión"].map(h =>
+                <th key={h} style={{ padding: "10px 14px", textAlign: h === "Vendedor" ? "left" : "right", fontWeight: 600, fontSize: 11, color: "var(--color-text-secondary)", textTransform: "uppercase" }}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {data.map(d => (
+                <tr key={d.vendedor_id} style={{ borderTop: "1px solid var(--color-border-tertiary)" }}>
+                  <td style={{ padding: "10px 14px", fontWeight: 600 }}>{d.vendedor_nombre}</td>
+                  <td style={{ padding: "10px 14px", textAlign: "right" }}>{d.total_cotizaciones}</td>
+                  <td style={{ padding: "10px 14px", textAlign: "right" }}>{fmt(d.monto_cotizado)}</td>
+                  <td style={{ padding: "10px 14px", textAlign: "right", color: "#059669" }}>{d.convertidas}</td>
+                  <td style={{ padding: "10px 14px", textAlign: "right", color: "#1D4ED8" }}>{fmt(d.monto_convertido)}</td>
+                  <td style={{ padding: "10px 14px", textAlign: "right", fontWeight: 700 }}>{d.tasa_conversion}%</td>
+                </tr>
+              ))}
+              {!data.length && <tr><td colSpan={6} style={{ padding: 30, textAlign: "center", color: "var(--color-text-secondary)" }}>Sin cotizaciones en este rango</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReporteLlantasPorMes() {
+  const [desde, setDesde] = useState(haceDiasISO(365));
+  const [hasta, setHasta] = useState(hoyISO());
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    api.reporteLlantasMes(`desde=${desde}&hasta=${hasta}`)
+      .then(r => { setData(r.data || []); setLoading(false); }).catch(() => setLoading(false));
+  }, [desde, hasta]);
+
+  return (
+    <div>
+      <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 0, marginBottom: 12 }}>
+        Basado en los lotes registrados en "Recepción de lotes" (no en compras a proveedor).
+      </p>
+      <FiltroFechas desde={desde} hasta={hasta} setDesde={setDesde} setHasta={setHasta} />
+      {loading ? <div style={{ textAlign: "center", padding: 30, color: "var(--color-text-secondary)" }}>Cargando...</div> : (
+        <div style={{ background: "var(--color-background-secondary)", borderRadius: 12, border: "1px solid var(--color-border-tertiary)", overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead><tr style={{ background: "var(--color-background-tertiary)" }}>
+              {["Mes", "# Lotes", "Recibidas", "Defectuosas", "Efectivas en almacén"].map(h =>
+                <th key={h} style={{ padding: "10px 14px", textAlign: h === "Mes" ? "left" : "right", fontWeight: 600, fontSize: 11, color: "var(--color-text-secondary)", textTransform: "uppercase" }}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {data.map(d => (
+                <tr key={d.mes} style={{ borderTop: "1px solid var(--color-border-tertiary)" }}>
+                  <td style={{ padding: "10px 14px", fontWeight: 600 }}>{d.mes}</td>
+                  <td style={{ padding: "10px 14px", textAlign: "right" }}>{d.num_lotes}</td>
+                  <td style={{ padding: "10px 14px", textAlign: "right" }}>{parseFloat(d.total_recibidas)}</td>
+                  <td style={{ padding: "10px 14px", textAlign: "right", color: "#B91C1C" }}>{parseFloat(d.total_defectuosas)}</td>
+                  <td style={{ padding: "10px 14px", textAlign: "right", fontWeight: 700, color: "#059669" }}>{parseFloat(d.total_efectivas)}</td>
+                </tr>
+              ))}
+              {!data.length && <tr><td colSpan={5} style={{ padding: 30, textAlign: "center", color: "var(--color-text-secondary)" }}>Sin lotes en este rango</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Reportes() {
+  const isMobile = useIsMobile();
+  const [tab, setTab] = useState("ventas");
+  const TABS = [
+    { id: "ventas",        label: "Ventas",                  icon: "💰" },
+    { id: "productos",     label: "Producto más vendido",    icon: "🏆" },
+    { id: "vendedores",    label: "Cotizaciones por vendedor", icon: "🧾" },
+    { id: "llantas",       label: "Llantas recibidas por mes", icon: "📥" },
+  ];
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap", borderBottom: "1px solid var(--color-border-tertiary)", paddingBottom: 0 }}>
+        {TABS.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)} style={{
+            padding: isMobile ? "8px 10px" : "10px 16px", background: "none", border: "none",
+            borderBottom: tab === t.id ? "2px solid #1D4ED8" : "2px solid transparent",
+            color: tab === t.id ? "#1D4ED8" : "var(--color-text-secondary)", fontWeight: tab === t.id ? 700 : 500,
+            fontSize: isMobile ? 12 : 13, cursor: "pointer", whiteSpace: "nowrap",
+          }}>{t.icon} {t.label}</button>
+        ))}
+      </div>
+      {tab === "ventas" && <ReporteVentas />}
+      {tab === "productos" && <ReporteProductoMasVendido />}
+      {tab === "vendedores" && <ReporteCotizacionesPorVendedor />}
+      {tab === "llantas" && <ReporteLlantasPorMes />}
+    </div>
+  );
+}
+
 function Configuracion() {
   const [datos, setDatos] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1347,9 +1731,11 @@ const NAV = [
   { id: "catalogo",    icon: "🛞", label: "Catálogo / Cotizar",  permiso: "cotizaciones" },
   { id: "ordenes",     icon: "🔧", label: "Órdenes de servicio", permiso: "ordenes" },
   { id: "inventario",  icon: "📦", label: "Inventario",          permiso: "productos_ver" },
+  { id: "lotes",       icon: "📥", label: "Recepción de lotes",  permiso: "compras" },
   { id: "compras",     icon: "🚚", label: "Compras",             permiso: "compras" },
   { id: "gastos",      icon: "💸", label: "Gastos",              permiso: "gastos" },
   { id: "clientes",    icon: "👥", label: "Clientes / CRM",      permiso: "clientes" },
+  { id: "reportes",    icon: "📊", label: "Reportes",            permiso: "reportes" },
   { id: "usuarios",    icon: "🔐", label: "Usuarios",            permiso: "todo" },
   { id: "configuracion", icon: "🏢", label: "Configuración",     permiso: "todo" },
 ];
@@ -1571,9 +1957,11 @@ function AppPrivada() {
         {seccionActiva === "catalogo"    && <Catalogo />}
         {seccionActiva === "ordenes"     && <Ordenes />}
         {seccionActiva === "inventario"  && <Inventario onNuevoProducto={() => setModal("producto")} />}
+        {seccionActiva === "lotes"       && <Lotes />}
         {seccionActiva === "compras"     && <Compras onNuevaCompra={() => setModal("compra")} />}
         {seccionActiva === "gastos"      && <Gastos onNuevoGasto={() => setModal("gasto")} />}
         {seccionActiva === "clientes"    && <Clientes />}
+        {seccionActiva === "reportes"    && <Reportes />}
         {seccionActiva === "usuarios"    && <Usuarios />}
         {seccionActiva === "configuracion" && <Configuracion />}
       </main>

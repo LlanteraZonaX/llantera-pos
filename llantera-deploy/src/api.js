@@ -122,6 +122,24 @@ export const api = {
     fetch(`${BASE}/negocio`, { headers: headers() }).then(handle),
   actualizarNegocio: (data) =>
     fetch(`${BASE}/negocio`, { method: 'PUT', headers: headers(), body: JSON.stringify(data) }).then(handle),
+
+  // Lotes de llantas (recepción e inspección)
+  lotes: (params = '') =>
+    fetch(`${BASE}/lotes?${params}`, { headers: headers() }).then(handle),
+  obtenerLote: (id) =>
+    fetch(`${BASE}/lotes/${id}`, { headers: headers() }).then(handle),
+  crearLote: (data) =>
+    fetch(`${BASE}/lotes`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle),
+
+  // Reportes
+  reporteVentas: (params = '') =>
+    fetch(`${BASE}/reportes/ventas?${params}`, { headers: headers() }).then(handle),
+  reporteProductoMasVendido: (params = '') =>
+    fetch(`${BASE}/reportes/producto-mas-vendido?${params}`, { headers: headers() }).then(handle),
+  reporteCotizacionesVendedor: (params = '') =>
+    fetch(`${BASE}/reportes/cotizaciones-vendedor?${params}`, { headers: headers() }).then(handle),
+  reporteLlantasMes: (params = '') =>
+    fetch(`${BASE}/reportes/llantas-mes?${params}`, { headers: headers() }).then(handle),
 };
 
 export default api;

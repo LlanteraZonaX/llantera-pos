@@ -13,6 +13,7 @@ import * as reportes   from '../controllers/reportes.controller.js';
 import * as cotizaciones from '../controllers/cotizaciones.controller.js';
 import * as usuarios   from '../controllers/usuarios.controller.js';
 import * as negocio    from '../controllers/negocio.controller.js';
+import * as lotes      from '../controllers/lotes.controller.js';
 
 const r = Router();
 
@@ -74,6 +75,9 @@ r.post('/credito/:id/pago',               authenticate, credito.registrarPago);
 r.get ('/reportes/dashboard',             authenticate, reportes.dashboard);
 r.get ('/reportes/ventas',                authenticate, reportes.ventasPorPeriodo);
 r.get ('/reportes/utilidad',              authenticate, reportes.utilidadBruta);
+r.get ('/reportes/producto-mas-vendido',  authenticate, reportes.productoMasVendido);
+r.get ('/reportes/cotizaciones-vendedor', authenticate, reportes.cotizacionesPorVendedor);
+r.get ('/reportes/llantas-mes',           authenticate, reportes.llantasPorMes);
 
 // ── Cotizaciones (vendedores) ───────────────────────
 r.get ('/cotizaciones',                   authenticate, cotizaciones.listar);
@@ -92,5 +96,10 @@ r.post('/usuarios/:id/reset-password',    authenticate, authorize('admin'), usua
 // ── Negocio (datos para cotizaciones: logo, dirección, tel, Facebook) ──
 r.get ('/negocio',                        authenticate, negocio.obtener);
 r.put ('/negocio',                        authenticate, authorize('admin'), negocio.actualizar);
+
+// ── Lotes de llantas (recepción, clasificación e inspección) ───────
+r.get ('/lotes',                          authenticate, lotes.listar);
+r.get ('/lotes/:id',                      authenticate, lotes.obtener);
+r.post('/lotes',                          authenticate, lotes.crear);
 
 export default r;
