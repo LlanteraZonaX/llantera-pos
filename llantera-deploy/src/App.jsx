@@ -649,17 +649,21 @@ function Clientes() {
   const [clientes, setClientes] = useState([]);
   const [buscar, setBuscar] = useState("");
   const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    const t = setTimeout(() => {
-      api.clientes(buscar ? `buscar=${encodeURIComponent(buscar)}` : "")
-        .then(r => { setClientes(r.data || []); setLoading(false); }).catch(() => setLoading(false));
-    }, 400);
-    return () => clearTimeout(t);
+  const [modal, setModal] = useState(false);
+
+  const cargar = useCallback(() => {
+    setLoading(true);
+    api.clientes(buscar ? `buscar=${encodeURIComponent(buscar)}` : "")
+      .then(r => { setClientes(r.data || []); setLoading(false); }).catch(() => setLoading(false));
   }, [buscar]);
+
+  useEffect(() => { const t = setTimeout(cargar, 400); return () => clearTimeout(t); }, [cargar]);
+
   return (
     <div>
       <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
         <input style={{ ...inputStyle, flex: 1 }} placeholder="Buscar por nombre, teléfono o RFC..." value={buscar} onChange={e => setBuscar(e.target.value)} />
+        <button onClick={() => setModal(true)} style={{ padding: "8px 18px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600, whiteSpace: "nowrap" }}>+ Nuevo cliente</button>
       </div>
       {loading ? <div style={{ textAlign: "center", padding: 40, color: "var(--color-text-secondary)" }}>Cargando...</div> :
         clientes.length === 0
@@ -674,6 +678,42 @@ function Clientes() {
             </div>
           ))
       }
+      {modal && <ModalCliente onClose={() => setModal(false)} onSaved={() => { setModal(false); cargar(); }} />}
+    </div>
+  );
+}
+
+function ModalCliente({ onClose, onSaved }) {
+  const [form, setForm] = useState({ nombre: "", telefono: "", email: "", rfc: "", direccion: "" });
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError(""); setLoading(true);
+    try {
+      await api.crearCliente(form);
+      onSaved();
+    } catch (err) { setError(err.message || "Error al crear cliente"); } finally { setLoading(false); }
+  };
+
+  return (
+    <div style={overlayStyle}>
+      <form onSubmit={submit} style={{ ...modalBase, maxWidth: 400 }}>
+        <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 600 }}>👤 Nuevo cliente</h2>
+        {error && <div style={{ background: "#FEE2E2", color: "#B91C1C", borderRadius: 8, padding: "8px 12px", fontSize: 12, marginBottom: 12 }}>{error}</div>}
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <input style={inputStyle} placeholder="Nombre completo *" required value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} />
+          <input style={inputStyle} placeholder="Teléfono" value={form.telefono} onChange={e => setForm({ ...form, telefono: e.target.value })} />
+          <input style={inputStyle} type="email" placeholder="Email (opcional)" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+          <input style={inputStyle} placeholder="RFC (opcional)" value={form.rfc} onChange={e => setForm({ ...form, rfc: e.target.value })} />
+          <input style={inputStyle} placeholder="Dirección (opcional)" value={form.direccion} onChange={e => setForm({ ...form, direccion: e.target.value })} />
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
+          <button type="button" onClick={onClose} style={{ flex: 1, padding: "9px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
+          <button type="submit" disabled={loading} style={{ flex: 1, padding: "9px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>{loading ? "Guardando..." : "Crear cliente"}</button>
+        </div>
+      </form>
     </div>
   );
 }
@@ -880,6 +920,157 @@ function ModalMiPassword({ onClose }) {
   );
 }
 
+// ─── Punto de Venta ────────────────────────────────────────────────────────────
+function Ventas() {
+  const isMobile = useIsMobile();
+  const [productos, setProductos] = useState([]);
+  const [buscar, setBuscar] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [carrito, setCarrito] = useState([]);
+  const [clientes, setClientes] = useState([]);
+  const [clienteId, setClienteId] = useState("");
+  const [metodoPago, setMetodoPago] = useState("efectivo");
+  const [montoPagado, setMontoPagado] = useState("");
+  const [descuento, setDescuento] = useState(0);
+  const [procesando, setProcesando] = useState(false);
+  const [error, setError] = useState("");
+  const [ventaLista, setVentaLista] = useState(null);
+
+  useEffect(() => {
+    api.clientes().then(r => setClientes(r.data || [])).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setLoading(true);
+      api.productos(buscar ? `buscar=${encodeURIComponent(buscar)}` : "")
+        .then(r => { setProductos(r.data || []); setLoading(false); })
+        .catch(() => setLoading(false));
+    }, 350);
+    return () => clearTimeout(t);
+  }, [buscar]);
+
+  const agregar = (producto) => {
+    setCarrito(prev => {
+      const existe = prev.find(i => i.producto.id === producto.id);
+      if (existe) return prev.map(i => i.producto.id === producto.id ? { ...i, cantidad: i.cantidad + 1 } : i);
+      return [...prev, { producto, cantidad: 1 }];
+    });
+  };
+  const quitar = (id) => setCarrito(prev => prev.filter(i => i.producto.id !== id));
+  const cambiarCantidad = (id, cantidad) => setCarrito(prev => prev.map(i => i.producto.id === id ? { ...i, cantidad: Math.max(1, cantidad) } : i));
+
+  const subtotal = carrito.reduce((s, i) => s + i.cantidad * i.producto.precio_venta, 0);
+  const base = Math.max(0, subtotal - (parseFloat(descuento) || 0));
+  const iva = base * 0.16;
+  const total = base + iva;
+
+  const cobrar = async () => {
+    if (!carrito.length) return setError("Agrega al menos un producto a la venta");
+    setProcesando(true); setError("");
+    try {
+      const data = await api.crearVenta({
+        cliente_id: clienteId || null,
+        items: carrito.map(i => ({ producto_id: i.producto.id, cantidad: i.cantidad, precio_unitario: i.producto.precio_venta })),
+        metodo_pago: metodoPago,
+        monto_pagado: montoPagado ? parseFloat(montoPagado) : total,
+        descuento_global: parseFloat(descuento) || 0,
+      });
+      setVentaLista(data);
+    } catch (e) { setError(e.message || "Error al registrar la venta"); } finally { setProcesando(false); }
+  };
+
+  const nuevaVenta = () => {
+    setCarrito([]); setClienteId(""); setMontoPagado(""); setDescuento(0); setVentaLista(null);
+  };
+
+  if (ventaLista) {
+    return (
+      <div style={{ maxWidth: 420, margin: "0 auto", textAlign: "center", padding: "40px 0" }}>
+        <div style={{ fontSize: 48, marginBottom: 8 }}>✅</div>
+        <h2 style={{ margin: "0 0 4px", fontSize: 18 }}>Venta {ventaLista.folio} registrada</h2>
+        <p style={{ color: "var(--color-text-secondary)", fontSize: 13, marginBottom: 4 }}>Total: {fmt(ventaLista.total)}</p>
+        {parseFloat(ventaLista.cambio) > 0 && <p style={{ color: "#059669", fontSize: 14, fontWeight: 700, marginBottom: 20 }}>Cambio: {fmt(ventaLista.cambio)}</p>}
+        <button onClick={nuevaVenta} style={{ padding: "10px 24px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>+ Nueva venta</button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 360px", gap: 20, alignItems: "flex-start" }}>
+      <div>
+        <input style={{ ...inputStyle, marginBottom: 16 }} placeholder="Buscar producto, medida o marca..." value={buscar} onChange={e => setBuscar(e.target.value)} />
+        {loading ? (
+          <div style={{ textAlign: "center", padding: 40, color: "var(--color-text-secondary)" }}>Cargando catálogo...</div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12 }}>
+            {productos.map(p => (
+              <button key={p.id} onClick={() => agregar(p)} style={{ textAlign: "left", background: "var(--color-background-secondary)", borderRadius: 10, border: "1px solid var(--color-border-tertiary)", padding: 10, cursor: "pointer", display: "flex", flexDirection: "column", gap: 4 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.3 }}>{p.nombre}</div>
+                {p.medida && <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>{p.medida}</div>}
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#1D4ED8" }}>{fmt(p.precio_venta)}</div>
+                <div style={{ fontSize: 10, color: p.stock_actual > 0 ? "#059669" : "#B91C1C" }}>
+                  {p.es_servicio ? "Servicio" : p.stock_actual > 0 ? `${p.stock_actual} disp.` : "Sin stock"}
+                </div>
+              </button>
+            ))}
+            {!productos.length && <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 40, color: "var(--color-text-secondary)" }}>Sin resultados</div>}
+          </div>
+        )}
+      </div>
+
+      <div style={{ background: "var(--color-background-secondary)", borderRadius: 14, border: "1px solid var(--color-border-tertiary)", padding: 16, position: isMobile ? "static" : "sticky", top: 0 }}>
+        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>🧾 Venta actual ({carrito.length})</div>
+        {error && <div style={{ background: "#FEE2E2", color: "#B91C1C", borderRadius: 8, padding: "8px 12px", fontSize: 12, marginBottom: 12 }}>{error}</div>}
+
+        {!carrito.length ? (
+          <div style={{ fontSize: 12, color: "var(--color-text-secondary)", textAlign: "center", padding: "20px 0" }}>Toca un producto para agregarlo</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12, maxHeight: 220, overflowY: "auto" }}>
+            {carrito.map(i => (
+              <div key={i.producto.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6, fontSize: 12 }}>
+                <div style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{i.producto.nombre}</div>
+                <input type="number" min={1} value={i.cantidad} onChange={e => cambiarCantidad(i.producto.id, parseInt(e.target.value) || 1)} style={{ width: 40, padding: "2px 4px", fontSize: 11, border: "1px solid var(--color-border-secondary)", borderRadius: 4, background: "var(--color-background-primary)", color: "var(--color-text-primary)" }} />
+                <span style={{ fontWeight: 600, minWidth: 55, textAlign: "right" }}>{fmt(i.cantidad * i.producto.precio_venta)}</span>
+                <button onClick={() => quitar(i.producto.id)} style={{ background: "none", border: "none", color: "#B91C1C", cursor: "pointer", fontSize: 13 }}>✕</button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <select style={{ ...inputStyle, marginBottom: 8 }} value={clienteId} onChange={e => setClienteId(e.target.value)}>
+          <option value="">Cliente general (sin registrar)</option>
+          {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+        </select>
+
+        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+          <select style={{ ...inputStyle, flex: 1 }} value={metodoPago} onChange={e => setMetodoPago(e.target.value)}>
+            <option value="efectivo">Efectivo</option>
+            <option value="tarjeta">Tarjeta</option>
+            <option value="transferencia">Transferencia</option>
+          </select>
+          <input style={{ ...inputStyle, flex: 1 }} type="number" min={0} placeholder="Descuento $" value={descuento} onChange={e => setDescuento(e.target.value)} />
+        </div>
+
+        <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 8 }}>
+          <div style={{ display: "flex", justifyContent: "space-between" }}><span>Subtotal</span><span>{fmt(subtotal)}</span></div>
+          <div style={{ display: "flex", justifyContent: "space-between" }}><span>IVA (16%)</span><span>{fmt(iva)}</span></div>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: 16, padding: "10px 0", borderTop: "1px solid var(--color-border-tertiary)", marginBottom: 12 }}>
+          <span>Total</span><span style={{ color: "#1D4ED8" }}>{fmt(total)}</span>
+        </div>
+
+        <input style={{ ...inputStyle, marginBottom: 12 }} type="number" min={0} placeholder={`Monto recibido (default: total)`} value={montoPagado} onChange={e => setMontoPagado(e.target.value)} />
+
+        <button onClick={cobrar} disabled={procesando || !carrito.length} style={{ width: "100%", padding: "12px", background: "#059669", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 14, fontWeight: 700, opacity: !carrito.length ? 0.5 : 1 }}>
+          {procesando ? "Procesando..." : "💰 Cobrar venta"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+
 function Catalogo() {
   const isMobile = useIsMobile();
   const [productos, setProductos] = useState([]);
@@ -1026,6 +1217,7 @@ function Catalogo() {
 
 const NAV = [
   { id: "dashboard",   icon: "🏠", label: "Dashboard",          permiso: "reportes" },
+  { id: "ventas",      icon: "💰", label: "Vender",              permiso: "ventas" },
   { id: "catalogo",    icon: "🛞", label: "Catálogo / Cotizar",  permiso: "cotizaciones" },
   { id: "ordenes",     icon: "🔧", label: "Órdenes de servicio", permiso: "ordenes" },
   { id: "inventario",  icon: "📦", label: "Inventario",          permiso: "productos_ver" },
@@ -1224,6 +1416,7 @@ function AppPrivada() {
         )}
 
         {seccionActiva === "dashboard"   && <Dashboard setSeccion={setSeccion} onNuevaCompra={() => setModal("compra")} onNuevoGasto={() => setModal("gasto")} />}
+        {seccionActiva === "ventas"      && <Ventas />}
         {seccionActiva === "catalogo"    && <Catalogo />}
         {seccionActiva === "ordenes"     && <Ordenes />}
         {seccionActiva === "inventario"  && <Inventario onNuevoProducto={() => setModal("producto")} />}
