@@ -16,8 +16,8 @@ export const listar = async (req, res) => {
     let where = ['v.negocio_id = $1'];
     const params = [negocio_id];
 
-    if (desde) { params.push(desde); where.push(`v.fecha >= $${params.length}`); }
-    if (hasta) { params.push(hasta); where.push(`v.fecha <= $${params.length}`); }
+    if (desde) { params.push(desde); where.push(`v.fecha >= $${params.length}::date`); }
+    if (hasta) { params.push(hasta); where.push(`v.fecha < $${params.length}::date + interval '1 day'`); }
     if (cliente_id) { params.push(cliente_id); where.push(`v.cliente_id = $${params.length}`); }
     if (estado) { params.push(estado); where.push(`v.estado = $${params.length}`); }
 

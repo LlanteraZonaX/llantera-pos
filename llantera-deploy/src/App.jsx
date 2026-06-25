@@ -1766,6 +1766,104 @@ function Ventas() {
 }
 
 
+// ─── Historial de ventas del día (o del rango que elijas) ─────────────────────
+const ESTADO_VENTA_INFO = {
+  pagada: { label: "Pagada", bg: "#D1FAE5", color: "#065F46" },
+  pendiente: { label: "Pendiente", bg: "#FEF3C7", color: "#92400E" },
+  cancelada: { label: "Cancelada", bg: "#FEE2E2", color: "#B91C1C" },
+};
+
+function HistorialVentas() {
+  const [desde, setDesde] = useState(hoyISO());
+  const [hasta, setHasta] = useState(hoyISO());
+  const [ventas, setVentas] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const cargar = useCallback(() => {
+    setLoading(true);
+    api.ventas(`desde=${desde}&hasta=${hasta}&limit=200`)
+      .then(r => { setVentas(r.data || []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [desde, hasta]);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  const totales = ventas.reduce((acc, v) => {
+    if (v.estado === "pagada") {
+      acc.total += parseFloat(v.total);
+      acc.pagadas += 1;
+      acc[v.metodo_pago] = (acc[v.metodo_pago] || 0) + parseFloat(v.total);
+    }
+    return acc;
+  }, { total: 0, pagadas: 0 });
+
+  const esHoy = desde === hoyISO() && hasta === hoyISO();
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 16 }}>
+        <div><label style={labelStyle}>Del</label><input type="date" style={{ ...inputStyle, width: 160 }} value={desde} onChange={e => setDesde(e.target.value)} /></div>
+        <div><label style={labelStyle}>Al</label><input type="date" style={{ ...inputStyle, width: 160 }} value={hasta} onChange={e => setHasta(e.target.value)} /></div>
+        <button onClick={() => { setDesde(hoyISO()); setHasta(hoyISO()); }} style={{ padding: "8px 16px", background: esHoy ? "#1D4ED8" : "var(--color-background-tertiary)", color: esHoy ? "#fff" : "var(--color-text-primary)", border: "1px solid var(--color-border-secondary)", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>Hoy</button>
+        <button onClick={cargar} style={{ padding: "8px 16px", background: "none", border: "1px solid var(--color-border-secondary)", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>↻ Actualizar</button>
+      </div>
+
+      <div style={{ display: "flex", gap: 16, marginBottom: 16, flexWrap: "wrap" }}>
+        <div style={{ background: "var(--color-background-secondary)", borderRadius: 10, padding: "12px 18px", border: "1px solid var(--color-border-tertiary)" }}>
+          <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Ventas pagadas</div>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>{totales.pagadas}</div>
+        </div>
+        <div style={{ background: "var(--color-background-secondary)", borderRadius: 10, padding: "12px 18px", border: "1px solid var(--color-border-tertiary)" }}>
+          <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Total cobrado</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: "#1D4ED8" }}>{fmt(totales.total)}</div>
+        </div>
+        <div style={{ background: "var(--color-background-secondary)", borderRadius: 10, padding: "12px 18px", border: "1px solid var(--color-border-tertiary)" }}>
+          <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Efectivo</div>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>{fmt(totales.efectivo || 0)}</div>
+        </div>
+        <div style={{ background: "var(--color-background-secondary)", borderRadius: 10, padding: "12px 18px", border: "1px solid var(--color-border-tertiary)" }}>
+          <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Tarjeta</div>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>{fmt(totales.tarjeta || 0)}</div>
+        </div>
+        <div style={{ background: "var(--color-background-secondary)", borderRadius: 10, padding: "12px 18px", border: "1px solid var(--color-border-tertiary)" }}>
+          <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Transferencia</div>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>{fmt(totales.transferencia || 0)}</div>
+        </div>
+      </div>
+
+      {loading ? <div style={{ textAlign: "center", padding: 40, color: "var(--color-text-secondary)" }}>Cargando...</div> : (
+        <div style={{ background: "var(--color-background-secondary)", borderRadius: 12, border: "1px solid var(--color-border-tertiary)", overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead><tr style={{ background: "var(--color-background-tertiary)" }}>
+              {["Folio", "Hora", "Cliente", "Cajero", "Método de pago", "Notas", "Total", "Estado"].map(h =>
+                <th key={h} style={{ padding: "10px 14px", textAlign: (h === "Total") ? "right" : "left", fontWeight: 600, fontSize: 11, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {ventas.length === 0
+                ? <tr><td colSpan={8} style={{ padding: 40, textAlign: "center", color: "var(--color-text-secondary)" }}>No hay ventas en este rango de fechas.</td></tr>
+                : ventas.map(v => {
+                  const estadoInfo = ESTADO_VENTA_INFO[v.estado] || ESTADO_VENTA_INFO.pagada;
+                  return (
+                    <tr key={v.id} style={{ borderTop: "1px solid var(--color-border-tertiary)" }}>
+                      <td style={{ padding: "10px 14px", fontWeight: 600 }}>{v.folio}</td>
+                      <td style={{ padding: "10px 14px", color: "var(--color-text-secondary)" }}>{new Date(v.fecha).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}</td>
+                      <td style={{ padding: "10px 14px" }}>{v.cliente_nombre || "Cliente general"}</td>
+                      <td style={{ padding: "10px 14px", color: "var(--color-text-secondary)" }}>{v.cajero_nombre || "—"}</td>
+                      <td style={{ padding: "10px 14px", textTransform: "capitalize" }}>{v.metodo_pago}</td>
+                      <td style={{ padding: "10px 14px", color: "var(--color-text-secondary)", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.notas || "—"}</td>
+                      <td style={{ padding: "10px 14px", textAlign: "right", fontWeight: 700, color: "#1D4ED8" }}>{fmt(v.total)}</td>
+                      <td style={{ padding: "10px 14px" }}><span style={{ background: estadoInfo.bg, color: estadoInfo.color, fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20 }}>{estadoInfo.label}</span></td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Catalogo() {
   const isMobile = useIsMobile();
   const [productos, setProductos] = useState([]);
@@ -1913,6 +2011,7 @@ function Catalogo() {
 const NAV = [
   { id: "dashboard",   icon: "🏠", label: "Dashboard",          permiso: "reportes" },
   { id: "ventas",      icon: "💰", label: "Vender",              permiso: "ventas" },
+  { id: "historial_ventas", icon: "🧾", label: "Historial de ventas", permiso: "ventas" },
   { id: "catalogo",    icon: "🛞", label: "Catálogo / Cotizar",  permiso: "cotizaciones" },
   { id: "ordenes",     icon: "🔧", label: "Órdenes de servicio", permiso: "ordenes" },
   { id: "inventario",  icon: "📦", label: "Inventario",          permiso: "productos_ver" },
@@ -2176,6 +2275,7 @@ function AppPrivada() {
 
         {seccionActiva === "dashboard"   && <Dashboard setSeccion={setSeccion} onNuevaCompra={() => setModal("compra")} onNuevoGasto={() => setModal("gasto")} onVerStockBajo={verStockBajo} />}
         {seccionActiva === "ventas"      && <Ventas />}
+        {seccionActiva === "historial_ventas" && <HistorialVentas />}
         {seccionActiva === "catalogo"    && <Catalogo />}
         {seccionActiva === "ordenes"     && <Ordenes />}
         {seccionActiva === "inventario"  && <Inventario onNuevoProducto={() => setModal("producto")} filtroStockBajoInicial={filtroStockBajo} />}
