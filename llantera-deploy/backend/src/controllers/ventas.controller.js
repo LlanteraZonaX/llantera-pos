@@ -16,8 +16,8 @@ export const listar = async (req, res) => {
     let where = ['v.negocio_id = $1'];
     const params = [negocio_id];
 
-    if (desde) { params.push(desde); where.push(`v.fecha >= $${params.length}::date`); }
-    if (hasta) { params.push(hasta); where.push(`v.fecha < $${params.length}::date + interval '1 day'`); }
+    if (desde) { params.push(desde); where.push(`(v.fecha AT TIME ZONE 'America/Mexico_City')::date >= $${params.length}::date`); }
+    if (hasta) { params.push(hasta); where.push(`(v.fecha AT TIME ZONE 'America/Mexico_City')::date <= $${params.length}::date`); }
     if (cliente_id) { params.push(cliente_id); where.push(`v.cliente_id = $${params.length}`); }
     if (estado) { params.push(estado); where.push(`v.estado = $${params.length}`); }
 
@@ -144,7 +144,7 @@ export const resumenDia = async (req, res) => {
          COALESCE(SUM(total) FILTER (WHERE metodo_pago = 'tarjeta' AND estado = 'pagada'), 0) as tarjeta,
          COALESCE(SUM(total) FILTER (WHERE estado = 'pendiente'), 0) as pendiente_cobro
        FROM ventas
-       WHERE DATE(fecha) = CURRENT_DATE AND negocio_id = $1`,
+       WHERE (fecha AT TIME ZONE 'America/Mexico_City')::date = (NOW() AT TIME ZONE 'America/Mexico_City')::date AND negocio_id = $1`,
       [req.user.negocio_id]
     );
     res.json(resumen);

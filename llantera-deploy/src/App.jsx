@@ -201,7 +201,7 @@ function ModalProducto({ producto, onClose, onSaved }) {
 
 // ─── Modal Nueva Compra ───────────────────────────────────────────────────────
 function ModalCompra({ onClose, onSaved, productos }) {
-  const [form, setForm] = useState({ proveedor: "", fecha_recepcion: new Date().toISOString().split("T")[0], num_factura: "", notas: "" });
+  const [form, setForm] = useState({ proveedor: "", fecha_recepcion: hoyISO(), num_factura: "", notas: "" });
   const [items, setItems] = useState([{ producto_id: "", medida: "", cantidad: "", costo_unitario: "" }]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -264,7 +264,7 @@ function ModalCompra({ onClose, onSaved, productos }) {
 // ─── Modal Nuevo Gasto ────────────────────────────────────────────────────────
 function ModalGasto({ onClose, onSaved }) {
   const CATS = ["Renta","Electricidad","Agua","Sueldos","Combustible","Mantenimiento equipo","Papelería","Publicidad","Otros"];
-  const [form, setForm] = useState({ categoria_id: 9, descripcion: "", monto: "", fecha: new Date().toISOString().split("T")[0], metodo_pago: "efectivo", notas: "" });
+  const [form, setForm] = useState({ categoria_id: 9, descripcion: "", monto: "", fecha: hoyISO(), metodo_pago: "efectivo", notas: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }));
@@ -697,7 +697,7 @@ function LineasClasificacion({ items, setItems, productos }) {
 }
 
 function ModalNuevoLote({ productos, onClose, onSaved }) {
-  const [form, setForm] = useState({ folio: "", proveedor_nombre: "", fecha_recepcion: new Date().toISOString().split("T")[0], cantidad_total: "", notas: "" });
+  const [form, setForm] = useState({ folio: "", proveedor_nombre: "", fecha_recepcion: hoyISO(), cantidad_total: "", notas: "" });
   const [folioTocado, setFolioTocado] = useState(false);
   const [items, setItems] = useState([{ producto_id: "", cantidad: "" }]);
   const [loading, setLoading] = useState(false);
@@ -850,7 +850,7 @@ function ModalNuevaDevolucion({ lotes, onClose, onSaved }) {
   const [loteId, setLoteId] = useState("");
   const [cantidad, setCantidad] = useState("");
   const [motivo, setMotivo] = useState("");
-  const [fecha, setFecha] = useState(new Date().toISOString().split("T")[0]);
+  const [fecha, setFecha] = useState(hoyISO());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -1047,8 +1047,15 @@ function ModalCliente({ onClose, onSaved }) {
 
 // ─── Gestión de Usuarios (solo admin) ─────────────────────────────────────────
 // ─── Módulo Reportes ──────────────────────────────────────────────────────────
-const hoyISO = () => new Date().toISOString().split("T")[0];
-const haceDiasISO = (dias) => new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+// IMPORTANTE: usamos fecha LOCAL (no toISOString, que es UTC) porque México
+// está detrás de UTC — usar UTC hace que después de ~6pm hora local el
+// sistema ya piense que es "el día siguiente".
+const fechaLocalISO = (date) => {
+  const y = date.getFullYear(), m = String(date.getMonth() + 1).padStart(2, "0"), d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
+const hoyISO = () => fechaLocalISO(new Date());
+const haceDiasISO = (dias) => fechaLocalISO(new Date(Date.now() - dias * 24 * 60 * 60 * 1000));
 
 function FiltroFechas({ desde, hasta, setDesde, setHasta, agrupacion, setAgrupacion }) {
   const isMobile = useIsMobile();

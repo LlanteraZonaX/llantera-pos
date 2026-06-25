@@ -9,11 +9,11 @@ export const dashboard = async (req, res) => {
                COUNT(*) FILTER (WHERE estado='pagada') as num_ventas,
                COALESCE(SUM(total) FILTER (WHERE estado='pagada' AND metodo_pago='efectivo'),0) as efectivo,
                COALESCE(SUM(total) FILTER (WHERE estado='pagada' AND metodo_pago='tarjeta'),0) as tarjeta
-             FROM ventas WHERE DATE(fecha) = CURRENT_DATE AND negocio_id = $1`, [negocio_id]),
+             FROM ventas WHERE (fecha AT TIME ZONE 'America/Mexico_City')::date = (NOW() AT TIME ZONE 'America/Mexico_City')::date AND negocio_id = $1`, [negocio_id]),
 
       query(`SELECT COALESCE(SUM(monto),0) as gastos_mes
              FROM gastos
-             WHERE DATE_TRUNC('month', fecha) = DATE_TRUNC('month', CURRENT_DATE) AND negocio_id = $1`, [negocio_id]),
+             WHERE DATE_TRUNC('month', fecha) = DATE_TRUNC('month', (NOW() AT TIME ZONE 'America/Mexico_City')::date) AND negocio_id = $1`, [negocio_id]),
 
       query(`SELECT COUNT(*) as stock_bajo
              FROM productos WHERE stock_actual <= stock_minimo AND activo = true AND es_servicio = false AND negocio_id = $1`, [negocio_id]),
@@ -31,12 +31,12 @@ export const dashboard = async (req, res) => {
     ]);
 
     const { rows: ventas_semana } = await query(
-      `SELECT DATE(fecha) as dia,
+      `SELECT (fecha AT TIME ZONE 'America/Mexico_City')::date as dia,
               COALESCE(SUM(total) FILTER (WHERE estado='pagada'),0) as total,
               COUNT(*) FILTER (WHERE estado='pagada') as cantidad
        FROM ventas
-       WHERE fecha >= CURRENT_DATE - INTERVAL '6 days' AND negocio_id = $1
-       GROUP BY DATE(fecha) ORDER BY dia`,
+       WHERE (fecha AT TIME ZONE 'America/Mexico_City')::date >= (NOW() AT TIME ZONE 'America/Mexico_City')::date - INTERVAL '6 days' AND negocio_id = $1
+       GROUP BY dia ORDER BY dia`,
       [negocio_id]
     );
 
@@ -45,7 +45,7 @@ export const dashboard = async (req, res) => {
        FROM ventas_detalle vd
        JOIN ventas v ON vd.venta_id = v.id
        JOIN productos p ON vd.producto_id = p.id
-       WHERE v.fecha >= DATE_TRUNC('month', CURRENT_DATE) AND v.estado = 'pagada' AND v.negocio_id = $1
+       WHERE (v.fecha AT TIME ZONE 'America/Mexico_City') >= DATE_TRUNC('month', (NOW() AT TIME ZONE 'America/Mexico_City')) AND v.estado = 'pagada' AND v.negocio_id = $1
        GROUP BY p.id, p.nombre, p.medida
        ORDER BY ingresos DESC LIMIT 5`,
       [negocio_id]
@@ -79,14 +79,17 @@ export const ventasPorPeriodo = async (req, res) => {
     const hastaVal = hasta || new Date().toISOString().slice(0, 10);
     const desdeVal = desde || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
+    // IMPORTANTE: fecha es TIMESTAMPTZ (guardada en UTC) — se convierte a hora
+    // de México antes de agrupar/comparar por día, para que una venta hecha
+    // a las 8pm no se cuente como "del día siguiente".
     const { rows } = await query(
-      `SELECT TO_CHAR(fecha, $1) as periodo,
+      `SELECT TO_CHAR(fecha AT TIME ZONE 'America/Mexico_City', $1) as periodo,
               SUM(total) as total, COUNT(*) as cantidad,
               SUM(total) FILTER (WHERE metodo_pago='efectivo') as efectivo,
               SUM(total) FILTER (WHERE metodo_pago='tarjeta') as tarjeta,
               SUM(total) FILTER (WHERE metodo_pago='transferencia') as transferencia
        FROM ventas
-       WHERE fecha BETWEEN $2 AND $3 AND estado = 'pagada' AND negocio_id = $4
+       WHERE (fecha AT TIME ZONE 'America/Mexico_City')::date BETWEEN $2::date AND $3::date AND estado = 'pagada' AND negocio_id = $4
        GROUP BY periodo ORDER BY periodo`,
       [formato, desdeVal, hastaVal, negocio_id]
     );
@@ -113,7 +116,7 @@ export const productoMasVendido = async (req, res) => {
        FROM ventas_detalle vd
        JOIN ventas v ON vd.venta_id = v.id
        JOIN productos p ON vd.producto_id = p.id
-       WHERE v.fecha::date BETWEEN $1 AND $2 AND v.estado = 'pagada' AND v.negocio_id = $3
+       WHERE (v.fecha AT TIME ZONE 'America/Mexico_City')::date BETWEEN $1::date AND $2::date AND v.estado = 'pagada' AND v.negocio_id = $3
        GROUP BY p.id, p.nombre, p.medida, p.marca
        ORDER BY unidades_vendidas DESC
        LIMIT $4`,
@@ -142,7 +145,7 @@ export const cotizacionesPorVendedor = async (req, res) => {
               COALESCE(SUM(c.total) FILTER (WHERE c.estado = 'convertida'), 0) as monto_convertido
        FROM cotizaciones c
        JOIN usuarios u ON c.vendedor_id = u.id
-       WHERE c.created_at::date BETWEEN $1 AND $2 AND c.negocio_id = $3
+       WHERE (c.created_at AT TIME ZONE 'America/Mexico_City')::date BETWEEN $1::date AND $2::date AND c.negocio_id = $3
        GROUP BY u.id, u.nombre
        ORDER BY total_cotizaciones DESC`,
       [desdeVal, hastaVal, negocio_id]
