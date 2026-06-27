@@ -1363,6 +1363,8 @@ function Usuarios() {
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null); // { tipo: 'nuevo'|'editar'|'password', usuario }
+  const [eliminandoId, setEliminandoId] = useState(null);
+  const [errorEliminar, setErrorEliminar] = useState("");
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -1380,6 +1382,19 @@ function Usuarios() {
     try { await api.actualizarUsuario(u.id, { activo: !u.activo }); cargar(); } catch {}
   };
 
+  const eliminar = async (u) => {
+    if (!window.confirm(`¿Eliminar permanentemente a "${u.nombre}"? Esta acción no se puede deshacer.`)) return;
+    setEliminandoId(u.id); setErrorEliminar("");
+    try {
+      await api.eliminarUsuario(u.id);
+      cargar();
+    } catch (e) {
+      setErrorEliminar(e.message || "No se pudo eliminar el usuario");
+    } finally {
+      setEliminandoId(null);
+    }
+  };
+
   const ROL_INFO = {
     admin:   { color: "#7C3AED", label: "Administrador", desc: "Acceso total al sistema" },
     gerente: { color: "#0EA5E9", label: "Gerente",        desc: "Ventas, compras, reportes y gastos" },
@@ -1393,6 +1408,10 @@ function Usuarios() {
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
         <button onClick={() => setModal({ tipo: "nuevo" })} style={{ padding: "8px 18px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>+ Nuevo usuario</button>
       </div>
+
+      {errorEliminar && (
+        <div style={{ background: "#FEE2E2", color: "#B91C1C", borderRadius: 8, padding: "10px 14px", fontSize: 13, marginBottom: 16 }}>{errorEliminar}</div>
+      )}
 
       {loading ? <div style={{ textAlign: "center", padding: 40, color: "var(--color-text-secondary)" }}>Cargando...</div> : (
         <div style={{ background: "var(--color-background-secondary)", borderRadius: 12, border: "1px solid var(--color-border-tertiary)", overflowX: "auto" }}>
@@ -1419,7 +1438,10 @@ function Usuarios() {
                     </td>
                     <td style={{ padding: "10px 14px", textAlign: "right", whiteSpace: "nowrap" }}>
                       <button onClick={() => setModal({ tipo: "password", usuario: u })} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "#1D4ED8", marginRight: 12 }}>Resetear clave</button>
-                      <button onClick={() => toggleActivo(u)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: u.activo ? "#B91C1C" : "#059669" }}>{u.activo ? "Desactivar" : "Activar"}</button>
+                      <button onClick={() => toggleActivo(u)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: u.activo ? "#B91C1C" : "#059669", marginRight: u.activo ? 0 : 12 }}>{u.activo ? "Desactivar" : "Activar"}</button>
+                      {!u.activo && (
+                        <button onClick={() => eliminar(u)} disabled={eliminandoId === u.id} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "#B91C1C", fontWeight: 600 }}>{eliminandoId === u.id ? "Eliminando..." : "🗑 Eliminar"}</button>
+                      )}
                     </td>
                   </tr>
                 );
@@ -1432,6 +1454,9 @@ function Usuarios() {
 
       <div style={{ marginTop: 16, fontSize: 12, color: "var(--color-text-secondary)" }}>
         <strong>Roles disponibles:</strong> {Object.values(ROL_INFO).map(r => r.label).join(" · ")}
+      </div>
+      <div style={{ marginTop: 6, fontSize: 11, color: "var(--color-text-secondary)" }}>
+        "Eliminar" solo aparece en usuarios desactivados, y el sistema no deja borrar a quien ya tiene ventas, cotizaciones u otro historial registrado (para no perder esos datos) — en ese caso, deja al usuario solo desactivado.
       </div>
 
       {modal?.tipo === "nuevo"    && <ModalUsuario roles={roles} onClose={() => setModal(null)} onSaved={() => { setModal(null); cargar(); }} />}
@@ -1572,6 +1597,7 @@ function Ventas() {
   const [montoPagado, setMontoPagado] = useState("");
   const [descuento, setDescuento] = useState(0);
   const [notas, setNotas] = useState("");
+  const [fechaVenta, setFechaVenta] = useState(""); // vacío = usar la fecha/hora actual
   const [cobrarIva, setCobrarIva] = useState(false);
   const [procesando, setProcesando] = useState(false);
   const [error, setError] = useState("");
@@ -1643,13 +1669,17 @@ function Ventas() {
         descuento_global: parseFloat(descuento) || 0,
         aplicar_iva: cobrarIva,
         notas: notas || null,
+        // Si se eligió una fecha distinta a hoy, se manda esa fecha pero con
+        // la hora actual, para "vaciar" ventas de días atrás sin perder el
+        // registro real de captura (eso queda aparte, en created_at).
+        fecha: fechaVenta ? `${fechaVenta} ${new Date().toTimeString().split(" ")[0]}` : null,
       });
       setVentaLista(data);
     } catch (e) { setError(e.message || "Error al registrar la venta"); } finally { setProcesando(false); }
   };
 
   const nuevaVenta = () => {
-    setCarrito([]); setClienteId(""); setMontoPagado(""); setDescuento(0); setNotas(""); setCobrarIva(false); setVentaLista(null);
+    setCarrito([]); setClienteId(""); setMontoPagado(""); setDescuento(0); setNotas(""); setFechaVenta(""); setCobrarIva(false); setVentaLista(null);
   };
 
   if (ventaLista) {
@@ -1752,6 +1782,14 @@ function Ventas() {
         <div style={{ marginBottom: 8 }}>
           <label style={labelStyle}>Notas (ej. motivo del descuento)</label>
           <input style={inputStyle} placeholder="Ej: descuento por cliente frecuente" value={notas} onChange={e => setNotas(e.target.value)} />
+        </div>
+
+        <div style={{ marginBottom: 8 }}>
+          <label style={labelStyle}>Fecha de la venta (para vaciar ventas de días atrás)</label>
+          <input type="date" style={inputStyle} max={hoyISO()} value={fechaVenta} onChange={e => setFechaVenta(e.target.value)} />
+          {fechaVenta && fechaVenta !== hoyISO() && (
+            <div style={{ fontSize: 11, color: "#D97706", marginTop: 4 }}>⚠ Esta venta se registrará con fecha {fmtFecha(fechaVenta)}, no con la de hoy.</div>
+          )}
         </div>
 
         <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 8 }}>
@@ -1863,6 +1901,89 @@ function HistorialVentas() {
                     </tr>
                   );
                 })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Cotizaciones: vista de seguimiento (admin ve todas, vendedor ve las suyas) ─
+const ESTADO_COT_INFO = {
+  borrador:   { label: "Borrador",   bg: "#E5E7EB", color: "#374151" },
+  enviada:    { label: "Enviada",    bg: "#DBEAFE", color: "#1E40AF" },
+  vista:      { label: "Vista",      bg: "#EDE9FE", color: "#5B21B6" },
+  aceptada:   { label: "Aceptada",   bg: "#D1FAE5", color: "#065F46" },
+  vencida:    { label: "Vencida",    bg: "#FEE2E2", color: "#B91C1C" },
+  convertida: { label: "✓ Cerrada (venta)", bg: "#A7F3D0", color: "#064E3B" },
+};
+
+function Cotizaciones() {
+  const [cotizaciones, setCotizaciones] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filtroEstado, setFiltroEstado] = useState("todas");
+  const [copiado, setCopiado] = useState(""); // id de lo que se acaba de copiar, para feedback visual
+
+  useEffect(() => {
+    api.cotizaciones().then(r => { setCotizaciones(r.data || []); setLoading(false); }).catch(() => setLoading(false));
+  }, []);
+
+  const copiar = (texto, key) => {
+    navigator.clipboard?.writeText(texto);
+    setCopiado(key);
+    setTimeout(() => setCopiado(""), 1500);
+  };
+
+  const visibles = filtroEstado === "todas" ? cotizaciones
+    : filtroEstado === "pendientes" ? cotizaciones.filter(c => ["borrador", "enviada", "vista"].includes(c.estado))
+    : cotizaciones.filter(c => c.estado === filtroEstado);
+
+  return (
+    <div>
+      <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 0, marginBottom: 16 }}>
+        Aquí ves las cotizaciones de todos tus vendedores: cuáles ya se cerraron como venta y cuáles siguen pendientes. Copia el teléfono del cliente para pasarlo a otro vendedor si hace falta dar seguimiento.
+      </p>
+
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+        {[["todas", "Todas"], ["pendientes", "Pendientes"], ["convertida", "Cerradas"], ["vencida", "Vencidas"]].map(([val, label]) => (
+          <button key={val} onClick={() => setFiltroEstado(val)} style={{ padding: "7px 16px", borderRadius: 20, border: "1px solid var(--color-border-secondary)", background: filtroEstado === val ? "#1D4ED8" : "none", color: filtroEstado === val ? "#fff" : "var(--color-text-primary)", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>{label}</button>
+        ))}
+      </div>
+
+      {loading ? <div style={{ textAlign: "center", padding: 40, color: "var(--color-text-secondary)" }}>Cargando...</div> :
+        visibles.length === 0 ? <div style={{ textAlign: "center", padding: 60, color: "var(--color-text-secondary)" }}>No hay cotizaciones en este filtro.</div> : (
+        <div style={{ background: "var(--color-background-secondary)", borderRadius: 12, border: "1px solid var(--color-border-tertiary)", overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead><tr style={{ background: "var(--color-background-tertiary)" }}>
+              {["Folio", "Cliente", "Teléfono", "Vendedor", "Total", "Estado", "Fecha", ""].map(h =>
+                <th key={h} style={{ padding: "10px 14px", textAlign: h === "Total" ? "right" : "left", fontWeight: 600, fontSize: 11, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {visibles.map(c => {
+                const info = ESTADO_COT_INFO[c.estado] || ESTADO_COT_INFO.borrador;
+                const link = `${window.location.origin}/cotizacion/${c.token_publico}`;
+                return (
+                  <tr key={c.id} style={{ borderTop: "1px solid var(--color-border-tertiary)" }}>
+                    <td style={{ padding: "10px 14px", fontWeight: 600 }}>{c.folio}</td>
+                    <td style={{ padding: "10px 14px" }}>{c.cliente_nombre || "Sin nombre"}</td>
+                    <td style={{ padding: "10px 14px" }}>
+                      {c.cliente_telefono ? (
+                        <button onClick={() => copiar(c.cliente_telefono, `tel-${c.id}`)} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "1px solid var(--color-border-secondary)", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontSize: 12, color: "var(--color-text-primary)" }}>
+                          {c.cliente_telefono} {copiado === `tel-${c.id}` ? "✅" : "📋"}
+                        </button>
+                      ) : <span style={{ color: "var(--color-text-secondary)" }}>—</span>}
+                    </td>
+                    <td style={{ padding: "10px 14px", color: "var(--color-text-secondary)" }}>{c.vendedor_nombre}</td>
+                    <td style={{ padding: "10px 14px", textAlign: "right", fontWeight: 700, color: "#1D4ED8" }}>{fmt(c.total)}</td>
+                    <td style={{ padding: "10px 14px" }}><span style={{ background: info.bg, color: info.color, fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20, whiteSpace: "nowrap" }}>{info.label}</span></td>
+                    <td style={{ padding: "10px 14px", color: "var(--color-text-secondary)" }}>{fmtFecha(c.created_at)}</td>
+                    <td style={{ padding: "10px 14px" }}>
+                      <button onClick={() => copiar(link, `link-${c.id}`)} style={{ background: "none", border: "1px solid var(--color-border-secondary)", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontSize: 11, whiteSpace: "nowrap" }}>{copiado === `link-${c.id}` ? "✅ Copiado" : "📋 Copiar enlace"}</button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -2020,6 +2141,7 @@ const NAV = [
   { id: "ventas",      icon: "💰", label: "Vender",              permiso: "ventas" },
   { id: "historial_ventas", icon: "🧾", label: "Historial de ventas", permiso: "ventas" },
   { id: "catalogo",    icon: "🛞", label: "Catálogo / Cotizar",  permiso: "cotizaciones" },
+  { id: "cotizaciones_lista", icon: "📋", label: "Cotizaciones",  permiso: "cotizaciones" },
   { id: "ordenes",     icon: "🔧", label: "Órdenes de servicio", permiso: "ordenes" },
   { id: "inventario",  icon: "📦", label: "Inventario",          permiso: "productos_ver" },
   { id: "lotes",       icon: "📥", label: "Lotes",               permiso: "compras", children: [
@@ -2284,6 +2406,7 @@ function AppPrivada() {
         {seccionActiva === "ventas"      && <Ventas />}
         {seccionActiva === "historial_ventas" && <HistorialVentas />}
         {seccionActiva === "catalogo"    && <Catalogo />}
+        {seccionActiva === "cotizaciones_lista" && <Cotizaciones />}
         {seccionActiva === "ordenes"     && <Ordenes />}
         {seccionActiva === "inventario"  && <Inventario onNuevoProducto={() => setModal("producto")} filtroStockBajoInicial={filtroStockBajo} />}
         {seccionActiva === "lotes_recepcion"  && <RecepcionLotes />}

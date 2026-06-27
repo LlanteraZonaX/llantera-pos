@@ -91,6 +91,7 @@ r.get ('/usuarios',                       authenticate, authorize('admin'), usua
 r.get ('/usuarios/roles',                 authenticate, usuarios.roles);
 r.post('/usuarios',                       authenticate, authorize('admin'), usuarios.crear);
 r.put ('/usuarios/:id',                   authenticate, authorize('admin'), usuarios.actualizar);
+r.delete('/usuarios/:id',                 authenticate, authorize('admin'), usuarios.eliminar);
 r.post('/usuarios/:id/reset-password',    authenticate, authorize('admin'), usuarios.resetPassword);
 
 // ── Negocio (datos para cotizaciones: logo, dirección, tel, Facebook) ──

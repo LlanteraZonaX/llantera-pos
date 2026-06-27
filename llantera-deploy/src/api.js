@@ -116,6 +116,8 @@ export const api = {
     fetch(`${BASE}/usuarios/${id}`, { method: 'PUT', headers: headers(), body: JSON.stringify(data) }).then(handle),
   resetPasswordUsuario: (id, password_nuevo) =>
     fetch(`${BASE}/usuarios/${id}/reset-password`, { method: 'POST', headers: headers(), body: JSON.stringify({ password_nuevo }) }).then(handle),
+  eliminarUsuario: (id) =>
+    fetch(`${BASE}/usuarios/${id}`, { method: 'DELETE', headers: headers() }).then(handle),
 
   // Datos del negocio (logo, dirección, teléfono, Facebook — para cotizaciones)
   negocio: () =>

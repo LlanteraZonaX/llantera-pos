@@ -73,7 +73,50 @@ export const actualizar = async (req, res) => {
   }
 };
 
-// Resetear contraseña de otro usuario (solo admin)
+// Eliminar usuario PERMANENTEMENTE — solo si nunca generó historial
+// (ventas, cotizaciones, gastos, compras, lotes, etc). Si ya tiene
+// movimientos asociados, se rechaza para no perder ese rastro: en ese
+// caso se recomienda desactivarlo en vez de borrarlo.
+export const eliminar = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const negocio_id = req.user.negocio_id;
+
+    if (id === req.user.id) {
+      return res.status(400).json({ error: 'No puedes eliminar tu propio usuario mientras tienes la sesión iniciada con él' });
+    }
+
+    const { rows: [usuario] } = await query('SELECT id FROM usuarios WHERE id = $1 AND negocio_id = $2', [id, negocio_id]);
+    if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' });
+
+    const { rows: [conteo] } = await query(
+      `SELECT
+         (SELECT COUNT(*) FROM ventas WHERE usuario_id = $1) +
+         (SELECT COUNT(*) FROM cotizaciones WHERE vendedor_id = $1) +
+         (SELECT COUNT(*) FROM gastos WHERE usuario_id = $1) +
+         (SELECT COUNT(*) FROM compras WHERE usuario_id = $1) +
+         (SELECT COUNT(*) FROM ordenes_servicio WHERE tecnico_id = $1 OR cajero_id = $1) +
+         (SELECT COUNT(*) FROM pagos_credito WHERE usuario_id = $1) +
+         (SELECT COUNT(*) FROM movimientos_inventario WHERE usuario_id = $1) +
+         (SELECT COUNT(*) FROM lotes_llantas WHERE usuario_id = $1) +
+         (SELECT COUNT(*) FROM lotes_devoluciones WHERE usuario_id = $1)
+         as total`,
+      [id]
+    );
+
+    if (parseInt(conteo.total) > 0) {
+      return res.status(409).json({
+        error: `Este usuario ya tiene ${conteo.total} movimiento(s) registrados (ventas, cotizaciones, gastos, etc). No se puede eliminar sin perder ese historial — usa "Desactivar" en su lugar para bloquear su acceso sin borrar nada.`
+      });
+    }
+
+    await query('DELETE FROM usuarios WHERE id = $1 AND negocio_id = $2', [id, negocio_id]);
+    res.json({ mensaje: 'Usuario eliminado correctamente' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al eliminar usuario' });
+  }
+};
 export const resetPassword = async (req, res) => {
   try {
     const { password_nuevo } = req.body;
