@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticate, authorize } from '../middleware/auth.js';
+import { loginLimiter } from '../middleware/security.js';
 import { login, me, cambiarPassword } from '../controllers/auth.controller.js';
 import * as clientes   from '../controllers/clientes.controller.js';
 import * as productos  from '../controllers/productos.controller.js';
@@ -18,7 +19,7 @@ import * as lotes      from '../controllers/lotes.controller.js';
 const r = Router();
 
 // ── Auth ────────────────────────────────────────────
-r.post('/auth/login',            login);
+r.post('/auth/login',            loginLimiter, login);
 r.get ('/auth/me',               authenticate, me);
 r.post('/auth/cambiar-password', authenticate, cambiarPassword);
 

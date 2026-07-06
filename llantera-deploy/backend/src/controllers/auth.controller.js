@@ -1,14 +1,28 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { query } from '../config/db.js';
+import { isLoginBlocked, trackLoginAttempt, loginLimiter } from '../middleware/security.js';
 
 const SECRET = process.env.JWT_SECRET || 'llantera_secret_dev_2024';
 
 export const login = async (req, res) => {
+  const ip = req.ip || req.connection.remoteAddress || 'unknown';
+
+  // ── Verificar si la IP está bloqueada por demasiados intentos fallidos ──────
+  if (isLoginBlocked(ip)) {
+    return res.status(429).json({
+      error: 'IP bloqueada temporalmente por demasiados intentos fallidos. Espera 15 minutos.',
+    });
+  }
+
   try {
     const { email, password } = req.body;
     if (!email || !password)
       return res.status(400).json({ error: 'Email y contraseña requeridos' });
+
+    // Validación básica de formato para no hacer query innecesario
+    if (typeof email !== 'string' || email.length > 200)
+      return res.status(400).json({ error: 'Email inválido' });
 
     const { rows } = await query(
       `SELECT u.id, u.nombre, u.email, u.password_hash, u.activo, u.negocio_id,
@@ -20,12 +34,23 @@ export const login = async (req, res) => {
       [email.toLowerCase().trim()]
     );
 
-    if (!rows.length || !rows[0].activo)
-      return res.status(401).json({ error: 'Credenciales inválidas' });
-
+    // Comparación siempre con bcrypt aunque no exista el usuario (evita timing attacks)
     const user = rows[0];
-    const valid = await bcrypt.compare(password, user.password_hash);
-    if (!valid) return res.status(401).json({ error: 'Credenciales inválidas' });
+    const hashDummy = '$2a$10$dummyhashfortimingatk.preventionXXXXXXXXXXXXXXXXXXXXXX';
+    const valid = user?.activo
+      ? await bcrypt.compare(password, user.password_hash)
+      : await bcrypt.compare(password, hashDummy).then(() => false);
+
+    if (!valid) {
+      const result = trackLoginAttempt(ip, false);
+      const msg = result.blocked
+        ? 'IP bloqueada temporalmente por demasiados intentos fallidos. Espera 15 minutos.'
+        : `Credenciales inválidas${result.remaining <= 2 ? ` (${result.remaining} intento(s) restante(s) antes del bloqueo)` : ''}`;
+      return res.status(401).json({ error: msg });
+    }
+
+    // Login exitoso — limpia el contador de intentos
+    trackLoginAttempt(ip, true);
 
     const token = jwt.sign(
       {
