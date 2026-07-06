@@ -46,10 +46,17 @@ export const crear = async (req, res) => {
     const {
       cliente_id, items, metodo_pago, monto_pagado,
       descuento_global = 0, requiere_factura = false, notas,
-      aplicar_iva = false
+      aplicar_iva = false, fecha
     } = req.body;
 
     if (!items?.length) throw new Error('La venta debe tener al menos un producto');
+
+    // Validar que la fecha no sea futura. $fecha es "YYYY-MM-DD" o null.
+    // Comparamos solo el string de fecha para evitar ambigüedades de timezone.
+    if (fecha) {
+      const hoyMexico = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Mexico_City' });
+      if (fecha > hoyMexico) throw new Error('La fecha de la venta no puede ser en el futuro');
+    }
 
     let subtotal = 0;
     const detalle = [];
@@ -80,10 +87,15 @@ export const crear = async (req, res) => {
     const folio = await generarFolio(client, negocio_id);
 
     const { rows: [venta] } = await client.query(
-      `INSERT INTO ventas (folio, cliente_id, usuario_id, subtotal, descuento, iva, total,
+      `INSERT INTO ventas (folio, cliente_id, usuario_id, fecha, subtotal, descuento, iva, total,
          metodo_pago, monto_pagado, cambio, requiere_factura, estado, notas, negocio_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
-      [folio, cliente_id, req.user.id, subtotal, descuento, iva, total,
+       VALUES ($1,$2,$3,
+         COALESCE(
+           ($4::date)::timestamp AT TIME ZONE 'America/Mexico_City',
+           NOW()
+         ),
+         $5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
+      [folio, cliente_id, req.user.id, fecha || null, subtotal, descuento, iva, total,
        metodo_pago || 'efectivo', monto_pagado || total, cambio,
        requiere_factura, estado, notas, negocio_id]
     );

@@ -1669,10 +1669,7 @@ function Ventas() {
         descuento_global: parseFloat(descuento) || 0,
         aplicar_iva: cobrarIva,
         notas: notas || null,
-        // Si se eligió una fecha distinta a hoy, se manda esa fecha pero con
-        // la hora actual, para "vaciar" ventas de días atrás sin perder el
-        // registro real de captura (eso queda aparte, en created_at).
-        fecha: fechaVenta ? `${fechaVenta} ${new Date().toTimeString().split(" ")[0]}` : null,
+        fecha: fechaVenta || null,   // solo "YYYY-MM-DD" o null (el backend calcula la hora)
       });
       setVentaLista(data);
     } catch (e) { setError(e.message || "Error al registrar la venta"); } finally { setProcesando(false); }
