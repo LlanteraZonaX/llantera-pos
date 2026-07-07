@@ -73,12 +73,6 @@ export const api = {
   actualizarCliente: (id, data) =>
     fetch(`${BASE}/clientes/${id}`, { method: 'PUT', headers: headers(), body: JSON.stringify(data) }).then(handle),
 
-  // Crédito
-  credito: (params = '') =>
-    fetch(`${BASE}/credito?${params}`, { headers: headers() }).then(handle),
-  registrarPago: (id, data) =>
-    fetch(`${BASE}/credito/${id}/pago`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle),
-
   // Fotos de producto
   agregarFotoProducto: (productoId, data) =>
     fetch(`${BASE}/productos/${productoId}/fotos`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle),
@@ -87,25 +81,24 @@ export const api = {
     form.append('foto', archivo);
     return fetch(`${BASE}/productos/${productoId}/fotos/subir`, {
       method: 'POST',
-      headers: getToken() ? { Authorization: `Bearer ${getToken()}` } : {}, // sin Content-Type: el navegador lo pone solo con el boundary correcto
+      headers: getToken() ? { Authorization: `Bearer ${getToken()}` } : {},
       body: form,
     }).then(handle);
   },
   eliminarFotoProducto: (fotoId) =>
     fetch(`${BASE}/productos/fotos/${fotoId}`, { method: 'DELETE', headers: headers() }).then(handle),
 
-  // Cotizaciones (vendedores)
+  // Cotizaciones
   cotizaciones: () =>
     fetch(`${BASE}/cotizaciones`, { headers: headers() }).then(handle),
   crearCotizacion: (data) =>
     fetch(`${BASE}/cotizaciones`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle),
   convertirCotizacionAVenta: (id) =>
     fetch(`${BASE}/cotizaciones/${id}/convertir`, { method: 'POST', headers: headers() }).then(handle),
-  // Esta SÍ es pública, no requiere headers de auth (la usa el cliente final)
   verCotizacionPublica: (token) =>
     fetch(`${BASE}/cotizaciones/publica/${token}`).then(handle),
 
-  // Gestión de usuarios (solo admin)
+  // Usuarios (admin)
   usuarios: () =>
     fetch(`${BASE}/usuarios`, { headers: headers() }).then(handle),
   rolesDisponibles: () =>
@@ -119,13 +112,13 @@ export const api = {
   eliminarUsuario: (id) =>
     fetch(`${BASE}/usuarios/${id}`, { method: 'DELETE', headers: headers() }).then(handle),
 
-  // Datos del negocio (logo, dirección, teléfono, Facebook — para cotizaciones)
+  // Negocio (logo, dirección, teléfono, Facebook)
   negocio: () =>
     fetch(`${BASE}/negocio`, { headers: headers() }).then(handle),
   actualizarNegocio: (data) =>
     fetch(`${BASE}/negocio`, { method: 'PUT', headers: headers(), body: JSON.stringify(data) }).then(handle),
 
-  // Lotes de llantas (recepción, clasificación y devolución)
+  // Lotes
   lotes: (params = '') =>
     fetch(`${BASE}/lotes?${params}`, { headers: headers() }).then(handle),
   obtenerLote: (id) =>
@@ -178,7 +171,9 @@ export const api = {
     fetch(`${BASE}/credito`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle),
   registrarPagoCredito: (id, data) =>
     fetch(`${BASE}/credito/${id}/pago`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle),
-};
+
+  // Reportes
+  reporteVentas: (params = '') =>
     fetch(`${BASE}/reportes/ventas?${params}`, { headers: headers() }).then(handle),
   reporteProductoMasVendido: (params = '') =>
     fetch(`${BASE}/reportes/producto-mas-vendido?${params}`, { headers: headers() }).then(handle),
