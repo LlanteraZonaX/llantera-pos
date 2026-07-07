@@ -40,6 +40,17 @@ export const dashboard = async (req, res) => {
       [negocio_id]
     );
 
+    const { rows: ultimas_ventas } = await query(
+      `SELECT v.folio, v.total, v.metodo_pago,
+              (v.fecha AT TIME ZONE 'America/Mexico_City') as fecha_local,
+              COALESCE(c.nombre, 'Cliente general') as cliente_nombre
+       FROM ventas v
+       LEFT JOIN clientes c ON v.cliente_id = c.id
+       WHERE v.negocio_id = $1 AND v.estado = 'pagada'
+       ORDER BY v.fecha DESC LIMIT 5`,
+      [negocio_id]
+    );
+
     const { rows: top_productos } = await query(
       `SELECT p.nombre, p.medida, SUM(vd.cantidad) as unidades, SUM(vd.subtotal) as ingresos
        FROM ventas_detalle vd
@@ -61,7 +72,8 @@ export const dashboard = async (req, res) => {
         utilidad_hoy: ventas_hoy.rows[0].ingresos_hoy - 0
       },
       ventas_semana,
-      top_productos
+      top_productos,
+      ultimas_ventas
     });
   } catch (err) {
     console.error(err);

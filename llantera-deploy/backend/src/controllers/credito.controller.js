@@ -1,31 +1,77 @@
+/**
+ * credito.controller.js
+ * Módulo de Crédito / Cuentas por Cobrar.
+ * ESTADO: creado y funcional como módulo independiente.
+ * PENDIENTE DE INTEGRAR: el botón "Cobrar a crédito" en el POS.
+ */
 import { query, getClient } from '../config/db.js';
 
 export const listar = async (req, res) => {
   try {
-    const { estado, cliente_id, limit=50, offset=0 } = req.query;
+    const { estado, limit = 50, offset = 0 } = req.query;
     const negocio_id = req.user.negocio_id;
-    let where = ['cc.negocio_id=$1'];
+    const where = ['cc.negocio_id = $1'];
     const params = [negocio_id];
-    if (estado)     { params.push(estado);     where.push(`cc.estado=$${params.length}`); }
-    if (cliente_id) { params.push(cliente_id); where.push(`cc.cliente_id=$${params.length}`); }
+
+    if (estado) { params.push(estado); where.push(`cc.estado = $${params.length}`); }
+    else         where.push(`cc.estado IN ('pendiente','parcial')`);
 
     const { rows } = await query(
-      `SELECT cc.*, c.nombre as cliente_nombre, c.telefono
+      `SELECT cc.*, c.nombre as cliente_nombre, c.telefono as cliente_telefono,
+              u.nombre as vendedor_nombre
        FROM cuentas_cobrar cc
-       JOIN clientes c ON cc.cliente_id=c.id
+       LEFT JOIN clientes c ON cc.cliente_id = c.id
+       LEFT JOIN usuarios u ON cc.usuario_id = u.id
        WHERE ${where.join(' AND ')}
-       ORDER BY cc.fecha_vencimiento ASC
-       LIMIT $${params.length+1} OFFSET $${params.length+2}`,
+       ORDER BY cc.vencimiento ASC NULLS LAST
+       LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
       [...params, limit, offset]
     );
-    const { rows: [totales] } = await query(
-      `SELECT COALESCE(SUM(saldo),0) as total_saldo,
-              COUNT(*) FILTER (WHERE fecha_vencimiento < CURRENT_DATE AND estado IN ('pendiente','parcial')) as vencidas
-       FROM cuentas_cobrar cc WHERE ${where.join(' AND ')}`, params
-    );
-    res.json({ data: rows, ...totales });
+    res.json({ data: rows });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'Error al obtener cuentas por cobrar' });
+  }
+};
+
+export const detalle = async (req, res) => {
+  try {
+    const { rows: [cuenta] } = await query(
+      `SELECT cc.*, c.nombre as cliente_nombre, c.telefono as cliente_telefono
+       FROM cuentas_cobrar cc LEFT JOIN clientes c ON cc.cliente_id = c.id
+       WHERE cc.id = $1 AND cc.negocio_id = $2`,
+      [req.params.id, req.user.negocio_id]
+    );
+    if (!cuenta) return res.status(404).json({ error: 'Cuenta no encontrada' });
+
+    const { rows: pagos } = await query(
+      `SELECT p.*, u.nombre as usuario_nombre
+       FROM pagos_credito p LEFT JOIN usuarios u ON p.usuario_id = u.id
+       WHERE p.cuenta_id = $1 ORDER BY p.created_at DESC`,
+      [cuenta.id]
+    );
+    res.json({ ...cuenta, pagos });
+  } catch (err) {
+    res.status(500).json({ error: 'Error al obtener detalle de cuenta' });
+  }
+};
+
+export const crear = async (req, res) => {
+  try {
+    const { cliente_id, total, descripcion, vencimiento, notas } = req.body;
+    if (!total || parseFloat(total) <= 0) return res.status(400).json({ error: 'El total debe ser mayor a 0' });
+
+    const folio = `CXC-${Date.now()}`;
+    const { rows: [cuenta] } = await query(
+      `INSERT INTO cuentas_cobrar
+         (negocio_id, cliente_id, usuario_id, folio, total, saldo, descripcion, vencimiento, notas, estado)
+       VALUES ($1,$2,$3,$4,$5,$5,$6,$7,$8,'pendiente') RETURNING *`,
+      [req.user.negocio_id, cliente_id || null, req.user.id, folio,
+       parseFloat(total), descripcion?.trim() || null, vencimiento || null, notas?.trim() || null]
+    );
+    res.status(201).json({ ...cuenta, mensaje: 'Venta a crédito registrada' });
+  } catch (err) {
+    res.status(500).json({ error: 'Error al registrar venta a crédito' });
   }
 };
 
@@ -33,37 +79,37 @@ export const registrarPago = async (req, res) => {
   const client = await getClient();
   try {
     await client.query('BEGIN');
-    const negocio_id = req.user.negocio_id;
-    const { monto, metodo_pago='efectivo', referencia, notas } = req.body;
-    if (!monto || monto <= 0) return res.status(400).json({ error: 'Monto inválido' });
+    const { monto, metodo_pago, notas } = req.body;
+    const montoNum = parseFloat(monto) || 0;
+    if (montoNum <= 0) throw new Error('El monto del pago debe ser mayor a 0');
 
     const { rows: [cuenta] } = await client.query(
-      'SELECT * FROM cuentas_cobrar WHERE id=$1 AND negocio_id=$2 FOR UPDATE', [req.params.id, negocio_id]
+      `SELECT * FROM cuentas_cobrar WHERE id = $1 AND negocio_id = $2 FOR UPDATE`,
+      [req.params.id, req.user.negocio_id]
     );
-    if (!cuenta) return res.status(404).json({ error: 'Cuenta no encontrada' });
-    if (cuenta.estado === 'pagada') return res.status(400).json({ error: 'Esta cuenta ya está pagada' });
+    if (!cuenta)                    throw new Error('Cuenta no encontrada');
+    if (cuenta.estado === 'pagada') throw new Error('Esta cuenta ya está liquidada');
+    if (montoNum > parseFloat(cuenta.saldo)) throw new Error(`El pago excede el saldo pendiente ($${cuenta.saldo})`);
 
-    const nuevo_pagado = parseFloat(cuenta.monto_pagado) + parseFloat(monto);
-    const nuevo_estado = nuevo_pagado >= parseFloat(cuenta.monto_total) ? 'pagada' : 'parcial';
+    await client.query(
+      `INSERT INTO pagos_credito (cuenta_id, usuario_id, monto, metodo_pago, notas)
+       VALUES ($1,$2,$3,$4,$5)`,
+      [cuenta.id, req.user.id, montoNum, metodo_pago || 'efectivo', notas || null]
+    );
 
-    await client.query(
-      `INSERT INTO pagos_credito (cuenta_id, usuario_id, monto, metodo_pago, referencia, notas)
-       VALUES ($1,$2,$3,$4,$5,$6)`,
-      [cuenta.id, req.user.id, monto, metodo_pago, referencia, notas]
-    );
-    await client.query(
-      'UPDATE cuentas_cobrar SET monto_pagado=$1, estado=$2 WHERE id=$3',
-      [nuevo_pagado, nuevo_estado, cuenta.id]
-    );
-    await client.query(
-      'UPDATE clientes SET saldo_pendiente=GREATEST(0, saldo_pendiente-$1) WHERE id=$2 AND negocio_id=$3',
-      [monto, cuenta.cliente_id, negocio_id]
+    const saldoNuevo = parseFloat(cuenta.saldo) - montoNum;
+    const estadoNuevo = saldoNuevo <= 0 ? 'pagada' : 'parcial';
+    const { rows: [actualizada] } = await client.query(
+      `UPDATE cuentas_cobrar SET saldo = $1, estado = $2 WHERE id = $3 RETURNING *`,
+      [saldoNuevo, estadoNuevo, cuenta.id]
     );
 
     await client.query('COMMIT');
-    res.json({ mensaje: 'Pago registrado', nuevo_estado, monto_pagado: nuevo_pagado });
+    res.json({ cuenta: actualizada, mensaje: estadoNuevo === 'pagada' ? 'Cuenta liquidada completamente ✓' : `Pago registrado. Saldo pendiente: $${saldoNuevo.toFixed(2)}` });
   } catch (err) {
     await client.query('ROLLBACK');
-    res.status(500).json({ error: 'Error al registrar pago' });
-  } finally { client.release(); }
+    res.status(500).json({ error: err.message || 'Error al registrar pago' });
+  } finally {
+    client.release();
+  }
 };

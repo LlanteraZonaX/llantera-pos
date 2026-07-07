@@ -139,8 +139,46 @@ export const api = {
   devolucionesLotes: (params = '') =>
     fetch(`${BASE}/lotes-devoluciones?${params}`, { headers: headers() }).then(handle),
 
-  // Reportes
-  reporteVentas: (params = '') =>
+  // Movimientos de inventario
+  movimientos: (params = '') =>
+    fetch(`${BASE}/movimientos?${params}`, { headers: headers() }).then(handle),
+
+  // Cortes de caja
+  corteActual: () =>
+    fetch(`${BASE}/cortes/actual`, { headers: headers() }).then(handle),
+  cortesHistorial: (params = '') =>
+    fetch(`${BASE}/cortes?${params}`, { headers: headers() }).then(handle),
+  abrirCorte: (data) =>
+    fetch(`${BASE}/cortes/abrir`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle),
+  cerrarCorte: (data) =>
+    fetch(`${BASE}/cortes/cerrar`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle),
+
+  // Catálogos
+  categorias: () =>
+    fetch(`${BASE}/catalogos/categorias`, { headers: headers() }).then(handle),
+  crearCategoria: (data) =>
+    fetch(`${BASE}/catalogos/categorias`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle),
+  actualizarCategoria: (id, data) =>
+    fetch(`${BASE}/catalogos/categorias/${id}`, { method: 'PUT', headers: headers(), body: JSON.stringify(data) }).then(handle),
+  eliminarCategoria: (id) =>
+    fetch(`${BASE}/catalogos/categorias/${id}`, { method: 'DELETE', headers: headers() }).then(handle),
+  marcas: () =>
+    fetch(`${BASE}/catalogos/marcas`, { headers: headers() }).then(handle),
+  crearMarca: (data) =>
+    fetch(`${BASE}/catalogos/marcas`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle),
+  eliminarMarca: (id) =>
+    fetch(`${BASE}/catalogos/marcas/${id}`, { method: 'DELETE', headers: headers() }).then(handle),
+
+  // Crédito / CxC
+  cuentasCredito: (params = '') =>
+    fetch(`${BASE}/credito?${params}`, { headers: headers() }).then(handle),
+  detalleCuenta: (id) =>
+    fetch(`${BASE}/credito/${id}`, { headers: headers() }).then(handle),
+  crearCuentaCredito: (data) =>
+    fetch(`${BASE}/credito`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle),
+  registrarPagoCredito: (id, data) =>
+    fetch(`${BASE}/credito/${id}/pago`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle),
+};
     fetch(`${BASE}/reportes/ventas?${params}`, { headers: headers() }).then(handle),
   reporteProductoMasVendido: (params = '') =>
     fetch(`${BASE}/reportes/producto-mas-vendido?${params}`, { headers: headers() }).then(handle),

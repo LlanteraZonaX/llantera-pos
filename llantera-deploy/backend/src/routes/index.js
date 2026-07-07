@@ -2,35 +2,38 @@ import { Router } from 'express';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { loginLimiter } from '../middleware/security.js';
 import { login, me, cambiarPassword } from '../controllers/auth.controller.js';
-import * as clientes   from '../controllers/clientes.controller.js';
-import * as productos  from '../controllers/productos.controller.js';
-import { uploadFoto } from '../middleware/upload.js';
-import * as compras    from '../controllers/compras.controller.js';
-import * as gastos     from '../controllers/gastos.controller.js';
-import * as ventas     from '../controllers/ventas.controller.js';
-import * as ordenes    from '../controllers/ordenes.controller.js';
-import * as credito    from '../controllers/credito.controller.js';
-import * as reportes   from '../controllers/reportes.controller.js';
+import * as clientes    from '../controllers/clientes.controller.js';
+import * as productos   from '../controllers/productos.controller.js';
+import { uploadFoto }   from '../middleware/upload.js';
+import * as compras     from '../controllers/compras.controller.js';
+import * as gastos      from '../controllers/gastos.controller.js';
+import * as ventas      from '../controllers/ventas.controller.js';
+import * as ordenes     from '../controllers/ordenes.controller.js';
+import * as reportes    from '../controllers/reportes.controller.js';
 import * as cotizaciones from '../controllers/cotizaciones.controller.js';
-import * as usuarios   from '../controllers/usuarios.controller.js';
-import * as negocio    from '../controllers/negocio.controller.js';
-import * as lotes      from '../controllers/lotes.controller.js';
+import * as usuarios    from '../controllers/usuarios.controller.js';
+import * as negocio     from '../controllers/negocio.controller.js';
+import * as lotes       from '../controllers/lotes.controller.js';
+import * as movimientos from '../controllers/movimientos.controller.js';
+import * as cortes      from '../controllers/cortes.controller.js';
+import * as catalogos   from '../controllers/catalogos.controller.js';
+import * as credito     from '../controllers/credito.controller.js';
 
 const r = Router();
 
-// ── Auth ────────────────────────────────────────────
+// ── Auth ──────────────────────────────────────────────────────────────────────
 r.post('/auth/login',            loginLimiter, login);
 r.get ('/auth/me',               authenticate, me);
 r.post('/auth/cambiar-password', authenticate, cambiarPassword);
 
-// ── Clientes & Vehículos ────────────────────────────
+// ── Clientes & Vehículos ──────────────────────────────────────────────────────
 r.get ('/clientes',                       authenticate, clientes.listar);
 r.get ('/clientes/:id',                   authenticate, clientes.obtener);
 r.post('/clientes',                       authenticate, clientes.crear);
 r.put ('/clientes/:id',                   authenticate, clientes.actualizar);
 r.post('/clientes/:id/vehiculos',         authenticate, clientes.crearVehiculo);
 
-// ── Productos / Inventario ──────────────────────────
+// ── Productos / Inventario ────────────────────────────────────────────────────
 r.get ('/productos',                      authenticate, productos.listar);
 r.get ('/productos/:id',                  authenticate, productos.obtener);
 r.post('/productos',                      authenticate, productos.crear);
@@ -45,34 +48,30 @@ r.post('/productos/:id/fotos/subir',      authenticate, (req, res, next) => {
 }, productos.subirFoto);
 r.delete('/productos/fotos/:fotoId',      authenticate, productos.eliminarFoto);
 
-// ── Compras ─────────────────────────────────────────
+// ── Compras ───────────────────────────────────────────────────────────────────
 r.get ('/compras',                        authenticate, compras.listar);
 r.get ('/compras/:id',                    authenticate, compras.obtener);
 r.post('/compras',                        authenticate, compras.crear);
 
-// ── Gastos ──────────────────────────────────────────
+// ── Gastos ────────────────────────────────────────────────────────────────────
 r.get ('/gastos',                         authenticate, gastos.listar);
 r.get ('/gastos/resumen/categoria',       authenticate, gastos.resumenPorCategoria);
 r.post('/gastos',                         authenticate, gastos.crear);
 r.put ('/gastos/:id',                     authenticate, gastos.actualizar);
 r.delete('/gastos/:id',                   authenticate, gastos.eliminar);
 
-// ── Ventas ──────────────────────────────────────────
+// ── Ventas ────────────────────────────────────────────────────────────────────
 r.get ('/ventas',                         authenticate, ventas.listar);
 r.get ('/ventas/resumen',                 authenticate, ventas.resumenDia);
 r.post('/ventas',                         authenticate, ventas.crear);
 
-// ── Órdenes de servicio ─────────────────────────────
+// ── Órdenes de servicio ───────────────────────────────────────────────────────
 r.get ('/ordenes',                        authenticate, ordenes.listar);
 r.get ('/ordenes/:id',                    authenticate, ordenes.obtener);
 r.post('/ordenes',                        authenticate, ordenes.crear);
 r.patch('/ordenes/:id/estado',            authenticate, ordenes.cambiarEstado);
 
-// ── Crédito / CxC ───────────────────────────────────
-r.get ('/credito',                        authenticate, credito.listar);
-r.post('/credito/:id/pago',               authenticate, credito.registrarPago);
-
-// ── Reportes & Dashboard ────────────────────────────
+// ── Reportes & Dashboard ──────────────────────────────────────────────────────
 r.get ('/reportes/dashboard',             authenticate, reportes.dashboard);
 r.get ('/reportes/ventas',                authenticate, reportes.ventasPorPeriodo);
 r.get ('/reportes/utilidad',              authenticate, reportes.utilidadBruta);
@@ -80,14 +79,13 @@ r.get ('/reportes/producto-mas-vendido',  authenticate, reportes.productoMasVend
 r.get ('/reportes/cotizaciones-vendedor', authenticate, reportes.cotizacionesPorVendedor);
 r.get ('/reportes/llantas-mes',           authenticate, reportes.llantasPorMes);
 
-// ── Cotizaciones (vendedores) ───────────────────────
+// ── Cotizaciones ──────────────────────────────────────────────────────────────
 r.get ('/cotizaciones',                   authenticate, cotizaciones.listar);
 r.post('/cotizaciones',                   authenticate, cotizaciones.crear);
 r.post('/cotizaciones/:id/convertir',     authenticate, cotizaciones.convertirAVenta);
-// Vista pública SIN autenticación — para compartir por WhatsApp/link directo
 r.get ('/cotizaciones/publica/:token',    cotizaciones.verPublica);
 
-// ── Usuarios (solo admin) ───────────────────────────
+// ── Usuarios (solo admin) ─────────────────────────────────────────────────────
 r.get ('/usuarios',                       authenticate, authorize('admin'), usuarios.listar);
 r.get ('/usuarios/roles',                 authenticate, usuarios.roles);
 r.post('/usuarios',                       authenticate, authorize('admin'), usuarios.crear);
@@ -95,16 +93,40 @@ r.put ('/usuarios/:id',                   authenticate, authorize('admin'), usua
 r.delete('/usuarios/:id',                 authenticate, authorize('admin'), usuarios.eliminar);
 r.post('/usuarios/:id/reset-password',    authenticate, authorize('admin'), usuarios.resetPassword);
 
-// ── Negocio (datos para cotizaciones: logo, dirección, tel, Facebook) ──
+// ── Negocio ───────────────────────────────────────────────────────────────────
 r.get ('/negocio',                        authenticate, negocio.obtener);
 r.put ('/negocio',                        authenticate, authorize('admin'), negocio.actualizar);
 
-// ── Lotes de llantas (recepción, clasificación e inspección) ───────
+// ── Lotes de llantas ──────────────────────────────────────────────────────────
 r.get ('/lotes',                          authenticate, lotes.listar);
 r.get ('/lotes-devoluciones',             authenticate, lotes.listarDevoluciones);
 r.get ('/lotes/:id',                      authenticate, lotes.obtener);
 r.post('/lotes',                          authenticate, lotes.crear);
 r.post('/lotes/:id/clasificar',           authenticate, lotes.clasificar);
 r.post('/lotes/:id/devolucion',           authenticate, lotes.registrarDevolucion);
+
+// ── Movimientos de inventario ─────────────────────────────────────────────────
+r.get ('/movimientos',                    authenticate, movimientos.listar);
+
+// ── Cortes de caja ────────────────────────────────────────────────────────────
+r.get ('/cortes/actual',                  authenticate, cortes.actual);
+r.get ('/cortes',                         authenticate, cortes.historial);
+r.post('/cortes/abrir',                   authenticate, cortes.abrir);
+r.post('/cortes/cerrar',                  authenticate, cortes.cerrar);
+
+// ── Catálogos auxiliares ──────────────────────────────────────────────────────
+r.get   ('/catalogos/categorias',         authenticate, catalogos.listarCategorias);
+r.post  ('/catalogos/categorias',         authenticate, authorize('admin'), catalogos.crearCategoria);
+r.put   ('/catalogos/categorias/:id',     authenticate, authorize('admin'), catalogos.actualizarCategoria);
+r.delete('/catalogos/categorias/:id',     authenticate, authorize('admin'), catalogos.eliminarCategoria);
+r.get   ('/catalogos/marcas',             authenticate, catalogos.listarMarcas);
+r.post  ('/catalogos/marcas',             authenticate, authorize('admin'), catalogos.crearMarca);
+r.delete('/catalogos/marcas/:id',         authenticate, authorize('admin'), catalogos.eliminarMarca);
+
+// ── Crédito / CxC (módulo independiente — sin integrar al POS todavía) ────────
+r.get ('/credito',                        authenticate, credito.listar);
+r.get ('/credito/:id',                    authenticate, credito.detalle);
+r.post('/credito',                        authenticate, credito.crear);
+r.post('/credito/:id/pago',               authenticate, credito.registrarPago);
 
 export default r;
