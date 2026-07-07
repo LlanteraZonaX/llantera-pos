@@ -393,12 +393,11 @@ function Inventario({ onNuevoProducto, filtroStockBajoInicial = false }) {
   return (
     <div>
       <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
-        <input style={{ ...inputStyle, flex: 1, minWidth: 200 }} placeholder="Buscar por nombre, medida o SKU..." value={buscar} onChange={e => setBuscar(e.target.value)} />
-        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--color-text-secondary)", cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}>
-          <input type="checkbox" checked={soloStockBajo} onChange={e => setSoloStockBajo(e.target.checked)} style={{ width: 14, height: 14, cursor: "pointer" }} />
-          Solo stock bajo
-        </label>
-        <button onClick={onNuevoProducto} style={{ padding: "8px 18px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>+ Nuevo producto</button>
+        <input style={{ ...inputStyle, flex: 1, minWidth: 200 }} placeholder="🔍 Buscar por nombre, medida o SKU..." value={buscar} onChange={e => setBuscar(e.target.value)} />
+        <button onClick={() => setSoloStockBajo(v => !v)} style={{ padding: "8px 14px", borderRadius: 20, border: `1px solid ${soloStockBajo ? "#EF4444" : "var(--color-border-secondary)"}`, background: soloStockBajo ? "rgba(239,68,68,0.12)" : "none", color: soloStockBajo ? "#EF4444" : "var(--color-text-secondary)", cursor: "pointer", fontSize: 12, fontWeight: soloStockBajo ? 700 : 400, whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6 }}>
+          ⚠ Stock bajo {soloStockBajo ? "✓" : ""}
+        </button>
+        <button onClick={onNuevoProducto} style={{ padding: "8px 18px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>+ Producto</button>
       </div>
       {loading ? <div style={{ textAlign: "center", padding: 40, color: "var(--color-text-secondary)" }}>Cargando...</div> : (
         <div style={{ background: "var(--color-background-secondary)", borderRadius: 12, border: "1px solid var(--color-border-tertiary)", overflowX: "auto" }}>
@@ -1094,6 +1093,22 @@ function ReporteVentas() {
   return (
     <div>
       <FiltroFechas desde={desde} hasta={hasta} setDesde={setDesde} setHasta={setHasta} agrupacion={agrupacion} setAgrupacion={setAgrupacion} />
+      {!loading && !!data.length && (
+        <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+          {[
+            { label: "# Ventas",   valor: data.reduce((s,d)=>s+parseInt(d.cantidad||0),0), color: "var(--color-text-primary)", f: v => v },
+            { label: "Total",      valor: totalGeneral,                                     color: "#60A5FA", f: fmt },
+            { label: "Efectivo",   valor: data.reduce((s,d)=>s+parseFloat(d.efectivo||0),0), color: "#34D399", f: fmt },
+            { label: "Tarjeta",    valor: data.reduce((s,d)=>s+parseFloat(d.tarjeta||0),0),  color: "#A78BFA", f: fmt },
+            { label: "Transfer.",  valor: data.reduce((s,d)=>s+parseFloat(d.transferencia||0),0), color: "#FB923C", f: fmt },
+          ].map(({ label, valor, color, f }) => (
+            <div key={label} style={{ background: "var(--color-background-secondary)", borderRadius: 10, padding: "10px 14px", border: "1px solid var(--color-border-tertiary)", flex: 1, minWidth: 80 }}>
+              <div style={{ fontSize: 9, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 3 }}>{label}</div>
+              <div style={{ fontWeight: 700, fontSize: 15, color }}>{f(valor)}</div>
+            </div>
+          ))}
+        </div>
+      )}
       {loading ? <div style={{ textAlign: "center", padding: 30, color: "var(--color-text-secondary)" }}>Cargando...</div> : (
         <div style={{ background: "var(--color-background-secondary)", borderRadius: 12, border: "1px solid var(--color-border-tertiary)", overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
@@ -1257,20 +1272,23 @@ function Reportes() {
   const isMobile = useIsMobile();
   const [tab, setTab] = useState("ventas");
   const TABS = [
-    { id: "ventas",        label: "Ventas",                  icon: "💰" },
-    { id: "productos",     label: "Producto más vendido",    icon: "🏆" },
-    { id: "vendedores",    label: "Cotizaciones por vendedor", icon: "🧾" },
-    { id: "llantas",       label: "Llantas recibidas por mes", icon: "📥" },
+    { id: "ventas",     label: "Ventas",                   icon: "💰" },
+    { id: "productos",  label: "Más vendido",               icon: "🏆" },
+    { id: "vendedores", label: "Por vendedor",              icon: "🧾" },
+    { id: "llantas",    label: "Llantas recibidas",         icon: "📥" },
   ];
   return (
     <div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap", borderBottom: "1px solid var(--color-border-tertiary)", paddingBottom: 0 }}>
+      <div style={{ display: "flex", gap: 6, marginBottom: 24, flexWrap: "wrap", background: "var(--color-background-secondary)", borderRadius: 12, padding: 6, border: "1px solid var(--color-border-tertiary)" }}>
         {TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
-            padding: isMobile ? "8px 10px" : "10px 16px", background: "none", border: "none",
-            borderBottom: tab === t.id ? "2px solid #1D4ED8" : "2px solid transparent",
-            color: tab === t.id ? "#1D4ED8" : "var(--color-text-secondary)", fontWeight: tab === t.id ? 700 : 500,
+            flex: 1, minWidth: isMobile ? "calc(50% - 6px)" : 0,
+            padding: "9px 12px", background: tab === t.id ? "#1D4ED8" : "none",
+            border: "none", borderRadius: 8,
+            color: tab === t.id ? "#fff" : "var(--color-text-secondary)",
+            fontWeight: tab === t.id ? 700 : 400,
             fontSize: isMobile ? 12 : 13, cursor: "pointer", whiteSpace: "nowrap",
+            transition: "all 0.15s",
           }}>{t.icon} {t.label}</button>
         ))}
       </div>
@@ -1602,6 +1620,7 @@ function Ventas() {
   const [procesando, setProcesando] = useState(false);
   const [error, setError] = useState("");
   const [ventaLista, setVentaLista] = useState(null);
+  const [opcionesAvanzadas, setOpcionesAvanzadas] = useState(false);
 
   useEffect(() => {
     api.clientes().then(r => setClientes(r.data || [])).catch(() => {});
@@ -1676,7 +1695,7 @@ function Ventas() {
   };
 
   const nuevaVenta = () => {
-    setCarrito([]); setClienteId(""); setMontoPagado(""); setDescuento(0); setNotas(""); setFechaVenta(""); setCobrarIva(false); setVentaLista(null);
+    setCarrito([]); setClienteId(""); setMontoPagado(""); setDescuento(0); setNotas(""); setFechaVenta(""); setCobrarIva(false); setVentaLista(null); setOpcionesAvanzadas(false);
   };
 
   if (ventaLista) {
@@ -1751,18 +1770,18 @@ function Ventas() {
           </div>
         )}
 
-        <select style={{ ...inputStyle, marginBottom: 8 }} value={clienteId} onChange={e => setClienteId(e.target.value)}>
-          <option value="">Cliente general (sin registrar)</option>
+        <select style={{ ...inputStyle, marginBottom: 10 }} value={clienteId} onChange={e => setClienteId(e.target.value)}>
+          <option value="">👤 Cliente general (sin registrar)</option>
           {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
         </select>
 
-        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
           <div style={{ flex: 1 }}>
             <label style={labelStyle}>Método de pago</label>
             <select style={inputStyle} value={metodoPago} onChange={e => setMetodoPago(e.target.value)}>
-              <option value="efectivo">Efectivo</option>
-              <option value="tarjeta">Tarjeta</option>
-              <option value="transferencia">Transferencia</option>
+              <option value="efectivo">💵 Efectivo</option>
+              <option value="tarjeta">💳 Tarjeta</option>
+              <option value="transferencia">🏦 Transferencia</option>
             </select>
           </div>
           <div style={{ flex: 1 }}>
@@ -1771,36 +1790,69 @@ function Ventas() {
           </div>
         </div>
 
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, marginBottom: 8, cursor: "pointer", userSelect: "none" }}>
-          <input type="checkbox" checked={cobrarIva} onChange={e => setCobrarIva(e.target.checked)} style={{ width: 15, height: 15, cursor: "pointer" }} />
-          Cobrar IVA (16%) en esta venta
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, marginBottom: 10, cursor: "pointer", userSelect: "none", padding: "6px 8px", borderRadius: 6, border: cobrarIva ? "1px solid #3B82F6" : "1px solid var(--color-border-tertiary)", background: cobrarIva ? "rgba(59,130,246,0.08)" : "transparent" }}>
+          <input type="checkbox" checked={cobrarIva} onChange={e => setCobrarIva(e.target.checked)} style={{ width: 14, height: 14, cursor: "pointer", accentColor: "#3B82F6" }} />
+          <span>Cobrar IVA <strong>+16%</strong></span>
+          {cobrarIva && <span style={{ marginLeft: "auto", fontSize: 11, color: "#60A5FA" }}>+{fmt(iva)}</span>}
         </label>
 
-        <div style={{ marginBottom: 8 }}>
-          <label style={labelStyle}>Notas (ej. motivo del descuento)</label>
-          <input style={inputStyle} placeholder="Ej: descuento por cliente frecuente" value={notas} onChange={e => setNotas(e.target.value)} />
+        {/* ── Totales ──────────────────────────────────────────────────────── */}
+        <div style={{ background: "var(--color-background-tertiary)", borderRadius: 10, padding: "10px 14px", marginBottom: 10 }}>
+          {(parseFloat(descuento) > 0) && (
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 4 }}>
+              <span>Subtotal</span><span>{fmt(subtotal)}</span>
+            </div>
+          )}
+          {(parseFloat(descuento) > 0) && (
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#059669", marginBottom: 4 }}>
+              <span>Descuento</span><span>-{fmt(parseFloat(descuento))}</span>
+            </div>
+          )}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: (parseFloat(descuento) > 0) ? "8px" : 0, borderTop: (parseFloat(descuento) > 0) ? "1px solid var(--color-border-tertiary)" : "none" }}>
+            <span style={{ fontWeight: 700, fontSize: 15 }}>Total</span>
+            <span style={{ fontWeight: 800, fontSize: 22, color: "#60A5FA", letterSpacing: "-0.5px" }}>{fmt(total)}</span>
+          </div>
         </div>
 
-        <div style={{ marginBottom: 8 }}>
-          <label style={labelStyle}>Fecha de la venta (para vaciar ventas de días atrás)</label>
-          <input type="date" style={inputStyle} max={hoyISO()} value={fechaVenta} onChange={e => setFechaVenta(e.target.value)} />
-          {fechaVenta && fechaVenta !== hoyISO() && (
-            <div style={{ fontSize: 11, color: "#D97706", marginTop: 4 }}>⚠ Esta venta se registrará con fecha {fmtFecha(fechaVenta)}, no con la de hoy.</div>
+        {/* ── Monto recibido + cambio ───────────────────────────────────────── */}
+        <div style={{ marginBottom: 10 }}>
+          <label style={labelStyle}>Monto recibido del cliente</label>
+          <input style={inputStyle} type="number" min={0} placeholder={`${fmt(total)}`} value={montoPagado} onChange={e => setMontoPagado(e.target.value)} />
+          {montoPagado && parseFloat(montoPagado) > total && (
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, padding: "6px 10px", background: "rgba(5,150,105,0.12)", borderRadius: 6, fontSize: 13, fontWeight: 700, color: "#10B981" }}>
+              <span>Cambio</span><span>{fmt(parseFloat(montoPagado) - total)}</span>
+            </div>
+          )}
+          {montoPagado && parseFloat(montoPagado) < total && (
+            <div style={{ marginTop: 6, padding: "4px 10px", background: "rgba(245,158,11,0.1)", borderRadius: 6, fontSize: 11, color: "#F59E0B" }}>
+              ⚠ Monto incompleto — quedará como crédito pendiente
+            </div>
           )}
         </div>
 
-        <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 8 }}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}><span>Subtotal</span><span>{fmt(subtotal)}</span></div>
-          {cobrarIva && <div style={{ display: "flex", justifyContent: "space-between" }}><span>IVA (16%)</span><span>{fmt(iva)}</span></div>}
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: 16, padding: "10px 0", borderTop: "1px solid var(--color-border-tertiary)", marginBottom: 12 }}>
-          <span>Total</span><span style={{ color: "#1D4ED8" }}>{fmt(total)}</span>
-        </div>
+        {/* ── Opciones avanzadas (colapsables) ─────────────────────────────── */}
+        <button onClick={() => setOpcionesAvanzadas(v => !v)} style={{ width: "100%", background: "none", border: "1px dashed var(--color-border-tertiary)", borderRadius: 6, padding: "6px 10px", cursor: "pointer", fontSize: 11, color: "var(--color-text-secondary)", textAlign: "left", marginBottom: opcionesAvanzadas ? 8 : 12 }}>
+          {opcionesAvanzadas ? "▾" : "▸"} Opciones avanzadas {(notas || fechaVenta) ? "●" : ""}
+        </button>
 
-        <input style={{ ...inputStyle, marginBottom: 12 }} type="number" min={0} placeholder={`Monto recibido (default: total)`} value={montoPagado} onChange={e => setMontoPagado(e.target.value)} />
+        {opcionesAvanzadas && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12, padding: "10px 12px", background: "var(--color-background-tertiary)", borderRadius: 8 }}>
+            <div>
+              <label style={labelStyle}>Notas (motivo de descuento u observaciones)</label>
+              <input style={inputStyle} placeholder="Ej: descuento por cliente frecuente" value={notas} onChange={e => setNotas(e.target.value)} />
+            </div>
+            <div>
+              <label style={labelStyle}>Fecha de la venta</label>
+              <input type="date" style={inputStyle} max={hoyISO()} value={fechaVenta} onChange={e => setFechaVenta(e.target.value)} />
+              {fechaVenta && fechaVenta !== hoyISO() && (
+                <div style={{ fontSize: 11, color: "#D97706", marginTop: 4 }}>⚠ Se registrará con fecha {fmtFecha(fechaVenta)}</div>
+              )}
+            </div>
+          </div>
+        )}
 
-        <button onClick={cobrar} disabled={procesando || !carrito.length} style={{ width: "100%", padding: "12px", background: "#059669", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 14, fontWeight: 700, opacity: !carrito.length ? 0.5 : 1 }}>
-          {procesando ? "Procesando..." : "💰 Cobrar venta"}
+        <button onClick={cobrar} disabled={procesando || !carrito.length} style={{ width: "100%", padding: "13px", background: carrito.length ? "linear-gradient(135deg, #059669 0%, #047857 100%)" : "var(--color-background-tertiary)", color: carrito.length ? "#fff" : "var(--color-text-secondary)", border: "none", borderRadius: 10, cursor: carrito.length ? "pointer" : "not-allowed", fontSize: 15, fontWeight: 700, letterSpacing: "0.02em", boxShadow: carrito.length ? "0 4px 14px rgba(5,150,105,0.3)" : "none", transition: "all 0.15s" }}>
+          {procesando ? "Procesando..." : carrito.length ? `💰 Cobrar ${fmt(total)}` : "Agrega productos"}
         </button>
       </div>
     </div>
@@ -2134,23 +2186,31 @@ function Catalogo() {
 
 
 const NAV = [
-  { id: "dashboard",   icon: "🏠", label: "Dashboard",          permiso: "reportes" },
-  { id: "ventas",      icon: "💰", label: "Vender",              permiso: "ventas" },
-  { id: "historial_ventas", icon: "🧾", label: "Historial de ventas", permiso: "ventas" },
-  { id: "catalogo",    icon: "🛞", label: "Catálogo / Cotizar",  permiso: "cotizaciones" },
-  { id: "cotizaciones_lista", icon: "📋", label: "Cotizaciones",  permiso: "cotizaciones" },
-  { id: "ordenes",     icon: "🔧", label: "Órdenes de servicio", permiso: "ordenes" },
-  { id: "inventario",  icon: "📦", label: "Inventario",          permiso: "productos_ver" },
-  { id: "lotes",       icon: "📥", label: "Lotes",               permiso: "compras", children: [
-      { id: "lotes_recepcion",  icon: "📦", label: "Recepción de lotes" },
-      { id: "lotes_devolucion", icon: "↩️", label: "Devolución de lotes" },
+  { id: "dashboard",          icon: "🏠", label: "Dashboard",         permiso: "reportes" },
+
+  // ── VENTAS ──────────────────────────────────────────────────────────────────
+  { id: "ventas",             icon: "🛒", label: "Punto de venta",     permiso: "ventas",        sectionLabel: "VENTAS" },
+  { id: "historial_ventas",   icon: "🧾", label: "Historial",          permiso: "ventas" },
+  { id: "catalogo",           icon: "🛞", label: "Cotizar",            permiso: "cotizaciones" },
+  { id: "cotizaciones_lista", icon: "📋", label: "Cotizaciones",       permiso: "cotizaciones" },
+
+  // ── OPERACIONES ─────────────────────────────────────────────────────────────
+  { id: "ordenes",            icon: "🔧", label: "Órdenes",            permiso: "ordenes",       sectionLabel: "OPERACIONES" },
+  { id: "inventario",         icon: "📦", label: "Inventario",         permiso: "productos_ver" },
+  { id: "lotes",              icon: "📥", label: "Lotes",              permiso: "compras", children: [
+      { id: "lotes_recepcion",  icon: "📦", label: "Recepción" },
+      { id: "lotes_devolucion", icon: "↩️", label: "Devolución" },
   ]},
-  { id: "compras",     icon: "🚚", label: "Compras",             permiso: "compras" },
-  { id: "gastos",      icon: "💸", label: "Gastos",              permiso: "gastos" },
-  { id: "clientes",    icon: "👥", label: "Clientes / CRM",      permiso: "clientes" },
-  { id: "reportes",    icon: "📊", label: "Reportes",            permiso: "reportes" },
-  { id: "usuarios",    icon: "🔐", label: "Usuarios",            permiso: "todo" },
-  { id: "configuracion", icon: "🏢", label: "Configuración",     permiso: "todo" },
+  { id: "compras",            icon: "🚚", label: "Compras",            permiso: "compras" },
+  { id: "gastos",             icon: "💸", label: "Gastos",             permiso: "gastos" },
+  { id: "clientes",           icon: "👥", label: "Clientes",           permiso: "clientes" },
+
+  // ── ANÁLISIS ────────────────────────────────────────────────────────────────
+  { id: "reportes",           icon: "📊", label: "Reportes",           permiso: "reportes",      sectionLabel: "ANÁLISIS" },
+
+  // ── ADMINISTRACIÓN ──────────────────────────────────────────────────────────
+  { id: "usuarios",           icon: "🔐", label: "Usuarios",           permiso: "todo",          sectionLabel: "ADMIN" },
+  { id: "configuracion",      icon: "🏢", label: "Configuración",      permiso: "todo" },
 ];
 
 // Lista "plana" de secciones reales (hijos de un grupo, o el ítem mismo si no
@@ -2331,34 +2391,47 @@ function AppPrivada() {
             ? <button onClick={() => setMenuAbierto(false)} style={{ marginLeft: "auto", background: "none", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: 18, padding: 2 }}>✕</button>
             : <button onClick={() => setSidebar(!sidebar)} style={{ marginLeft: "auto", background: "none", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: 16, padding: 2 }}>{sidebar ? "◂" : "▸"}</button>}
         </div>
-        <nav style={{ flex: 1, padding: "10px 0", overflowY: "auto" }}>
+        <nav style={{ flex: 1, padding: "8px 0", overflowY: "auto" }}>
           {navVisible.map(item => {
+            // ── Etiqueta de sección (solo cuando el sidebar está expandido) ──
+            const sectionHeader = item.sectionLabel && (sidebar || isMobile) ? (
+              <div key={`sep-${item.id}`} style={{ padding: "14px 16px 4px", fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: "rgba(255,255,255,0.25)", userSelect: "none" }}>
+                {item.sectionLabel}
+              </div>
+            ) : null;
+
             if (item.children) {
               const expandido = grupoAbierto === item.id || item.children.some(c => c.id === seccionActiva);
+              const tieneActivo = item.children.some(c => c.id === seccionActiva);
               return (
                 <div key={item.id}>
+                  {sectionHeader}
                   <button onClick={() => toggleGrupo(item.id)}
-                    style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: (sidebar || isMobile) ? "12px 16px" : "10px 0", justifyContent: (sidebar || isMobile) ? "flex-start" : "center", background: "none", border: "none", cursor: "pointer", color: expandido ? "#fff" : "rgba(255,255,255,0.55)", fontSize: 14, fontWeight: expandido ? 600 : 400, transition: "all 0.15s", textAlign: "left" }}>
-                    <span style={{ fontSize: 17, flexShrink: 0 }}>{item.icon}</span>
+                    style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: (sidebar || isMobile) ? "10px 16px" : "10px 0", justifyContent: (sidebar || isMobile) ? "flex-start" : "center", background: tieneActivo ? "rgba(29,78,216,0.2)" : "none", border: "none", cursor: "pointer", color: expandido ? "#fff" : "rgba(255,255,255,0.6)", fontSize: 13, fontWeight: expandido ? 600 : 400, transition: "all 0.15s", textAlign: "left" }}>
+                    <span style={{ fontSize: 16, flexShrink: 0 }}>{item.icon}</span>
                     {(sidebar || isMobile) && <span style={{ whiteSpace: "nowrap", flex: 1 }}>{item.label}</span>}
-                    {(sidebar || isMobile) && <span style={{ fontSize: 11, opacity: 0.5 }}>{expandido ? "▾" : "▸"}</span>}
+                    {(sidebar || isMobile) && <span style={{ fontSize: 10, opacity: 0.45 }}>{expandido ? "▾" : "▸"}</span>}
                   </button>
                   {expandido && (sidebar || isMobile) && item.children.map(child => (
                     <button key={child.id} onClick={() => irASeccion(child.id)}
-                      style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 16px 10px 36px", background: seccionActiva === child.id ? "rgba(29,78,216,0.35)" : "none", borderLeft: seccionActiva === child.id ? "3px solid #60A5FA" : "3px solid transparent", border: "none", cursor: "pointer", color: seccionActiva === child.id ? "#fff" : "rgba(255,255,255,0.5)", fontSize: 13, fontWeight: seccionActiva === child.id ? 600 : 400, transition: "all 0.15s", textAlign: "left" }}>
-                      <span style={{ fontSize: 14, flexShrink: 0 }}>{child.icon}</span>
+                      style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "8px 16px 8px 38px", background: seccionActiva === child.id ? "rgba(59,130,246,0.18)" : "none", border: "none", borderLeft: seccionActiva === child.id ? "3px solid #60A5FA" : "3px solid transparent", cursor: "pointer", color: seccionActiva === child.id ? "#93C5FD" : "rgba(255,255,255,0.45)", fontSize: 12, fontWeight: seccionActiva === child.id ? 600 : 400, transition: "all 0.15s", textAlign: "left" }}>
+                      <span style={{ fontSize: 13, flexShrink: 0 }}>{child.icon}</span>
                       <span style={{ whiteSpace: "nowrap" }}>{child.label}</span>
                     </button>
                   ))}
                 </div>
               );
             }
+            const activo = seccionActiva === item.id;
             return (
-              <button key={item.id} onClick={() => irASeccion(item.id)}
-                style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: (sidebar || isMobile) ? "12px 16px" : "10px 0", justifyContent: (sidebar || isMobile) ? "flex-start" : "center", background: seccionActiva === item.id ? "rgba(29,78,216,0.35)" : "none", borderLeft: seccionActiva === item.id ? "3px solid #60A5FA" : "3px solid transparent", border: "none", cursor: "pointer", color: seccionActiva === item.id ? "#fff" : "rgba(255,255,255,0.55)", fontSize: 14, fontWeight: seccionActiva === item.id ? 600 : 400, transition: "all 0.15s", textAlign: "left" }}>
-                <span style={{ fontSize: 17, flexShrink: 0 }}>{item.icon}</span>
-                {(sidebar || isMobile) && <span style={{ whiteSpace: "nowrap" }}>{item.label}</span>}
-              </button>
+              <div key={item.id}>
+                {sectionHeader}
+                <button onClick={() => irASeccion(item.id)}
+                  style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: (sidebar || isMobile) ? "10px 16px" : "10px 0", justifyContent: (sidebar || isMobile) ? "flex-start" : "center", background: activo ? "rgba(59,130,246,0.18)" : "none", borderLeft: activo ? "3px solid #60A5FA" : "3px solid transparent", borderRight: "none", borderTop: "none", borderBottom: "none", cursor: "pointer", color: activo ? "#93C5FD" : "rgba(255,255,255,0.6)", fontSize: 13, fontWeight: activo ? 600 : 400, transition: "all 0.15s", textAlign: "left" }}>
+                  <span style={{ fontSize: 16, flexShrink: 0 }}>{item.icon}</span>
+                  {(sidebar || isMobile) && <span style={{ whiteSpace: "nowrap" }}>{item.label}</span>}
+                </button>
+              </div>
             );
           })}
         </nav>
