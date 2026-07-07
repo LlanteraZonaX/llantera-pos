@@ -1141,7 +1141,7 @@ function Catalogos() {
   const [cats, setCats] = useState([]);
   const [marcas, setMarcas] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ nombre: "", descripcion: "" });
+  const [form, setForm] = useState({ nombre: "", tipo: "" });
   const [editandoId, setEditandoId] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
@@ -1156,13 +1156,20 @@ function Catalogos() {
 
   useEffect(() => { cargar(); }, [cargar]);
 
+  const TIPOS = [
+    { value: "llanta",      label: "Llanta" },
+    { value: "refaccion",   label: "Refacción" },
+    { value: "consumible",  label: "Consumible" },
+    { value: "servicio",    label: "Servicio" },
+  ];
+
   const guardarCategoria = async () => {
     if (!form.nombre.trim()) return setError("El nombre es obligatorio");
     setGuardando(true); setError("");
     try {
-      if (editandoId) await api.actualizarCategoria(editandoId, form);
-      else await api.crearCategoria(form);
-      setForm({ nombre: "", descripcion: "" }); setEditandoId(null); cargar();
+      if (editandoId) await api.actualizarCategoria(editandoId, { nombre: form.nombre, tipo: form.tipo || null });
+      else await api.crearCategoria({ nombre: form.nombre, tipo: form.tipo || null });
+      setForm({ nombre: "", tipo: "" }); setEditandoId(null); cargar();
     } catch (e) { setError(e.message); } finally { setGuardando(false); }
   };
 
@@ -1171,7 +1178,7 @@ function Catalogos() {
     setGuardando(true); setError("");
     try {
       await api.crearMarca({ nombre: form.nombre });
-      setForm({ nombre: "", descripcion: "" }); cargar();
+      setForm({ nombre: "", tipo: "" }); cargar();
     } catch (e) { setError(e.message); } finally { setGuardando(false); }
   };
 
@@ -1189,7 +1196,7 @@ function Catalogos() {
     <div>
       <div style={{ display: "flex", gap: 6, marginBottom: 20, background: "var(--color-background-secondary)", borderRadius: 10, padding: 6, border: "1px solid var(--color-border-tertiary)", width: "fit-content" }}>
         {[["categorias", "📁 Categorías"], ["marcas", "🏷️ Marcas"]].map(([id, label]) => (
-          <button key={id} onClick={() => { setTab(id); setForm({ nombre: "", descripcion: "" }); setEditandoId(null); setError(""); }} style={{ padding: "8px 18px", background: tab === id ? "#1D4ED8" : "none", color: tab === id ? "#fff" : "var(--color-text-secondary)", border: "none", borderRadius: 7, cursor: "pointer", fontSize: 13, fontWeight: tab === id ? 700 : 400 }}>{label}</button>
+          <button key={id} onClick={() => { setTab(id); setForm({ nombre: "", tipo: "" }); setEditandoId(null); setError(""); }} style={{ padding: "8px 18px", background: tab === id ? "#1D4ED8" : "none", color: tab === id ? "#fff" : "var(--color-text-secondary)", border: "none", borderRadius: 7, cursor: "pointer", fontSize: 13, fontWeight: tab === id ? 700 : 400 }}>{label}</button>
         ))}
       </div>
 
@@ -1201,17 +1208,17 @@ function Catalogos() {
             {loading ? <div style={{ padding: 40, textAlign: "center", color: "var(--color-text-secondary)" }}>Cargando...</div> : (
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead><tr style={{ background: "var(--color-background-tertiary)" }}>
-                  {["Categoría", "Descripción", "Productos", ""].map(h => <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase" }}>{h}</th>)}
+                  {["Categoría", "Tipo", "Productos", ""].map(h => <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase" }}>{h}</th>)}
                 </tr></thead>
                 <tbody>
-                  {cats.length === 0 ? <tr><td colSpan={4} style={{ padding: 30, textAlign: "center", color: "var(--color-text-secondary)" }}>Sin categorías</td></tr>
+                  {cats.length === 0 ? <tr><td colSpan={4} style={{ padding: 30, textAlign: "center", color: "var(--color-text-secondary)" }}>Sin categorías — agrega la primera</td></tr>
                     : cats.map(c => (
                       <tr key={c.id} style={{ borderTop: "1px solid var(--color-border-tertiary)" }}>
                         <td style={{ padding: "10px 14px", fontWeight: 600 }}>{c.nombre}</td>
-                        <td style={{ padding: "10px 14px", color: "var(--color-text-secondary)" }}>{c.descripcion || "—"}</td>
+                        <td style={{ padding: "10px 14px", color: "var(--color-text-secondary)", textTransform: "capitalize" }}>{c.tipo || "—"}</td>
                         <td style={{ padding: "10px 14px" }}>{c.num_productos}</td>
                         <td style={{ padding: "10px 14px", display: "flex", gap: 8 }}>
-                          <button onClick={() => { setEditandoId(c.id); setForm({ nombre: c.nombre, descripcion: c.descripcion || "" }); }} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "#1D4ED8" }}>✏️</button>
+                          <button onClick={() => { setEditandoId(c.id); setForm({ nombre: c.nombre, tipo: c.tipo || "" }); }} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "#1D4ED8" }}>✏️</button>
                           <button onClick={() => eliminarCat(c.id)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "#B91C1C" }}>🗑</button>
                         </td>
                       </tr>
@@ -1222,10 +1229,16 @@ function Catalogos() {
           </div>
           <div style={{ background: "var(--color-background-secondary)", borderRadius: 12, border: "1px solid var(--color-border-tertiary)", padding: 18 }}>
             <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 14 }}>{editandoId ? "Editar categoría" : "Nueva categoría"}</div>
-            <div style={{ marginBottom: 10 }}><label style={labelStyle}>Nombre *</label><input style={inputStyle} value={form.nombre} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} /></div>
-            <div style={{ marginBottom: 14 }}><label style={labelStyle}>Descripción</label><input style={inputStyle} value={form.descripcion} onChange={e => setForm(p => ({ ...p, descripcion: e.target.value }))} /></div>
+            <div style={{ marginBottom: 10 }}><label style={labelStyle}>Nombre *</label><input style={inputStyle} placeholder="Ej: Seminueva, Servicio..." value={form.nombre} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} /></div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={labelStyle}>Tipo</label>
+              <select style={inputStyle} value={form.tipo} onChange={e => setForm(p => ({ ...p, tipo: e.target.value }))}>
+                <option value="">— Sin tipo —</option>
+                {TIPOS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </div>
             <div style={{ display: "flex", gap: 8 }}>
-              {editandoId && <button onClick={() => { setEditandoId(null); setForm({ nombre: "", descripcion: "" }); }} style={{ flex: 1, padding: "8px", border: "1px solid var(--color-border-secondary)", borderRadius: 7, background: "none", cursor: "pointer", fontSize: 13 }}>Cancelar</button>}
+              {editandoId && <button onClick={() => { setEditandoId(null); setForm({ nombre: "", tipo: "" }); }} style={{ flex: 1, padding: "8px", border: "1px solid var(--color-border-secondary)", borderRadius: 7, background: "none", cursor: "pointer", fontSize: 13 }}>Cancelar</button>}
               <button onClick={guardarCategoria} disabled={guardando} style={{ flex: 1, padding: "8px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 7, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>{guardando ? "..." : editandoId ? "Guardar" : "Agregar"}</button>
             </div>
           </div>
