@@ -18,7 +18,7 @@ export const actual = async (req, res) => {
   }
 };
 
-// Abrir una nueva caja (solo si no hay una ya abierta)
+// Abrir caja
 export const abrir = async (req, res) => {
   try {
     const negocio_id = req.user.negocio_id;
@@ -42,8 +42,7 @@ export const abrir = async (req, res) => {
   }
 };
 
-// Cerrar la caja actualmente abierta.
-// Calcula monto_esperado = monto_inicial + total efectivo de ventas en el turno.
+// Cerrar caja
 export const cerrar = async (req, res) => {
   const client = await getClient();
   try {
@@ -60,28 +59,12 @@ export const cerrar = async (req, res) => {
     );
     if (!corte) throw new Error('No hay caja abierta que cerrar');
 
-    // Calcular totales de ventas durante el turno
-    const { rows: [totales] } = await client.query(
-      `SELECT
-         COALESCE(SUM(total) FILTER (WHERE estado = 'pagada'), 0) as total_ventas,
-         COALESCE(SUM(total) FILTER (WHERE estado = 'pagada' AND metodo_pago = 'efectivo'), 0) as total_efectivo
-       FROM ventas
-       WHERE negocio_id = $1
-         AND (fecha AT TIME ZONE 'America/Mexico_City') >= (corr.fecha_apertura AT TIME ZONE 'America/Mexico_City')
-         AND fecha <= NOW()`,
-      // Usamos subquery para pasar fecha_apertura del corte
-      [negocio_id]
-    );
-
-    // Recalcular correctamente
     const { rows: [tots] } = await client.query(
       `SELECT
          COALESCE(SUM(total) FILTER (WHERE estado = 'pagada'), 0) as total_ventas,
          COALESCE(SUM(total) FILTER (WHERE estado = 'pagada' AND metodo_pago = 'efectivo'), 0) as total_efectivo
        FROM ventas
-       WHERE negocio_id = $1
-         AND fecha >= $2
-         AND fecha <= NOW()`,
+       WHERE negocio_id = $1 AND fecha >= $2 AND fecha <= NOW()`,
       [negocio_id, corte.fecha_apertura]
     );
 
@@ -115,7 +98,7 @@ export const cerrar = async (req, res) => {
   }
 };
 
-// Historial de cortes anteriores (cerrados)
+// Historial de cortes
 export const historial = async (req, res) => {
   try {
     const { limit = 20, offset = 0 } = req.query;
@@ -132,5 +115,58 @@ export const historial = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error al obtener historial de cortes' });
+  }
+};
+
+// Detalle completo de un corte — para generar el PDF del cierre
+export const detalle = async (req, res) => {
+  try {
+    const negocio_id = req.user.negocio_id;
+    const { rows: [corte] } = await query(
+      `SELECT c.*, u.nombre as usuario_nombre,
+              n.nombre as negocio_nombre, n.logo_url, n.telefono as negocio_telefono,
+              n.direccion as negocio_direccion, n.facebook_url as negocio_facebook
+       FROM cortes_caja c
+       LEFT JOIN usuarios u ON c.usuario_id = u.id
+       JOIN negocios n ON c.negocio_id = n.id
+       WHERE c.id = $1 AND c.negocio_id = $2`,
+      [req.params.id, negocio_id]
+    );
+    if (!corte) return res.status(404).json({ error: 'Corte no encontrado' });
+
+    const { rows: ventas } = await query(
+      `SELECT
+         COUNT(*) FILTER (WHERE estado = 'pagada') as num_ventas,
+         COALESCE(SUM(total)     FILTER (WHERE estado = 'pagada'), 0) as total_ventas,
+         COALESCE(SUM(total)     FILTER (WHERE estado = 'pagada' AND metodo_pago = 'efectivo'),      0) as efectivo,
+         COALESCE(SUM(total)     FILTER (WHERE estado = 'pagada' AND metodo_pago = 'tarjeta'),       0) as tarjeta,
+         COALESCE(SUM(total)     FILTER (WHERE estado = 'pagada' AND metodo_pago = 'transferencia'), 0) as transferencia,
+         COALESCE(SUM(descuento) FILTER (WHERE estado = 'pagada'), 0) as total_descuentos,
+         COALESCE(SUM(iva)       FILTER (WHERE estado = 'pagada'), 0) as total_iva
+       FROM ventas
+       WHERE negocio_id = $1
+         AND fecha >= $2
+         AND fecha <= COALESCE($3::timestamptz, NOW())`,
+      [negocio_id, corte.fecha_apertura, corte.fecha_cierre]
+    );
+
+    const { rows: ultimas } = await query(
+      `SELECT v.folio, (v.fecha AT TIME ZONE 'America/Mexico_City') as fecha_local,
+              v.total, v.metodo_pago, v.descuento,
+              COALESCE(c.nombre, 'Cliente general') as cliente_nombre
+       FROM ventas v
+       LEFT JOIN clientes c ON v.cliente_id = c.id
+       WHERE v.negocio_id = $1
+         AND v.fecha >= $2
+         AND v.fecha <= COALESCE($3::timestamptz, NOW())
+         AND v.estado = 'pagada'
+       ORDER BY v.fecha DESC LIMIT 20`,
+      [negocio_id, corte.fecha_apertura, corte.fecha_cierre]
+    );
+
+    res.json({ ...corte, resumen_ventas: ventas[0], ultimas_ventas: ultimas });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al obtener detalle del corte' });
   }
 };

@@ -1018,17 +1018,122 @@ function MovimientosInventario() {
 }
 
 // ─── Cortes de caja ───────────────────────────────────────────────────────────
+// Función de generación de PDF del corte (HTML imprimible en ventana nueva)
+const generarPDFCorte = async (corteId) => {
+  try {
+    const d = await api.corteDetalle(corteId);
+    const fmtH = (ts) => ts ? new Date(ts).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" }) : "—";
+    const fmtD = (ts) => ts ? new Date(ts).toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" }) : "—";
+    const diff = parseFloat(d.diferencia || 0);
+    const diffColor = diff === 0 ? "#059669" : diff > 0 ? "#1D4ED8" : "#B91C1C";
+    const diffLabel = diff === 0 ? "Exacto ✓" : diff > 0 ? `Sobrante: $${Math.abs(diff).toFixed(2)}` : `Faltante: $${Math.abs(diff).toFixed(2)}`;
+    const rv = d.resumen_ventas || {};
+    const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+<title>Corte de Caja ${d.fecha_apertura ? fmtD(d.fecha_apertura) : ""}</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; font-size: 12px; color: #111; background: #fff; padding: 24px; max-width: 680px; margin: 0 auto; }
+  .header { display: flex; align-items: center; gap: 16px; border-bottom: 2px solid #111; padding-bottom: 14px; margin-bottom: 16px; }
+  .logo { width: 56px; height: 56px; border-radius: 8px; object-fit: cover; }
+  .logo-placeholder { width: 56px; height: 56px; border-radius: 8px; background: #f0f0f0; display: flex; align-items: center; justify-content: center; font-size: 24px; }
+  .negocio-nombre { font-size: 18px; font-weight: 700; }
+  .negocio-info { font-size: 11px; color: #555; margin-top: 3px; }
+  h1 { font-size: 15px; font-weight: 700; text-align: center; background: #111; color: #fff; padding: 8px; margin-bottom: 16px; letter-spacing: 0.05em; }
+  .fila { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #eee; }
+  .fila strong { font-weight: 600; }
+  .seccion { background: #f8f8f8; border: 1px solid #ddd; border-radius: 6px; padding: 12px 16px; margin-bottom: 12px; }
+  .seccion h2 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #555; margin-bottom: 8px; }
+  .resultado { font-size: 16px; font-weight: 800; color: ${diffColor}; text-align: right; padding: 10px 16px; border: 2px solid ${diffColor}; border-radius: 8px; margin-bottom: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 8px; }
+  th { background: #f0f0f0; text-align: left; padding: 5px 8px; font-size: 10px; text-transform: uppercase; }
+  td { padding: 5px 8px; border-bottom: 1px solid #eee; }
+  .footer { margin-top: 20px; padding-top: 12px; border-top: 1px solid #ccc; font-size: 10px; color: #777; text-align: center; }
+  @media print { body { padding: 12px; } button { display: none !important; } }
+</style></head><body>
+<div class="header">
+  ${d.logo_url ? `<img src="${d.logo_url}" class="logo" alt="logo">` : `<div class="logo-placeholder">🛞</div>`}
+  <div>
+    <div class="negocio-nombre">${d.negocio_nombre || "Negocio"}</div>
+    <div class="negocio-info">${[d.negocio_direccion, d.negocio_telefono, d.negocio_facebook].filter(Boolean).join(" · ")}</div>
+  </div>
+</div>
+
+<h1>CORTE DE CAJA</h1>
+
+<div class="seccion">
+  <h2>Información del turno</h2>
+  <div class="fila"><span>Cajero</span><strong>${d.usuario_nombre || "—"}</strong></div>
+  <div class="fila"><span>Fecha</span><strong>${fmtD(d.fecha_apertura)}</strong></div>
+  <div class="fila"><span>Apertura</span><strong>${fmtH(d.fecha_apertura)}</strong></div>
+  <div class="fila"><span>Cierre</span><strong>${fmtH(d.fecha_cierre)}</strong></div>
+  ${d.notas ? `<div class="fila"><span>Notas</span><strong>${d.notas}</strong></div>` : ""}
+</div>
+
+<div class="seccion">
+  <h2>Ventas del turno</h2>
+  <div class="fila"><span># Transacciones</span><strong>${rv.num_ventas || 0}</strong></div>
+  <div class="fila"><span>Total ventas</span><strong>$${parseFloat(rv.total_ventas||0).toFixed(2)}</strong></div>
+  <div class="fila"><span>· Efectivo</span><strong>$${parseFloat(rv.efectivo||0).toFixed(2)}</strong></div>
+  <div class="fila"><span>· Tarjeta</span><strong>$${parseFloat(rv.tarjeta||0).toFixed(2)}</strong></div>
+  <div class="fila"><span>· Transferencia</span><strong>$${parseFloat(rv.transferencia||0).toFixed(2)}</strong></div>
+  ${parseFloat(rv.total_descuentos||0) > 0 ? `<div class="fila"><span>Descuentos aplicados</span><strong>-$${parseFloat(rv.total_descuentos).toFixed(2)}</strong></div>` : ""}
+</div>
+
+<div class="seccion">
+  <h2>Arqueo de caja</h2>
+  <div class="fila"><span>Fondo inicial</span><strong>$${parseFloat(d.monto_inicial||0).toFixed(2)}</strong></div>
+  <div class="fila"><span>+ Efectivo en ventas</span><strong>$${parseFloat(rv.efectivo||0).toFixed(2)}</strong></div>
+  <div class="fila"><span>= Monto esperado</span><strong>$${parseFloat(d.monto_esperado||0).toFixed(2)}</strong></div>
+  <div class="fila"><span>Efectivo contado</span><strong>$${parseFloat(d.monto_final_contado||0).toFixed(2)}</strong></div>
+</div>
+
+<div class="resultado">${diffLabel}</div>
+
+${(d.ultimas_ventas || []).length > 0 ? `
+<div class="seccion">
+  <h2>Detalle de ventas del turno</h2>
+  <table><thead><tr><th>Folio</th><th>Hora</th><th>Cliente</th><th>Método</th><th style="text-align:right">Total</th></tr></thead><tbody>
+  ${(d.ultimas_ventas || []).map(v => `<tr>
+    <td>${v.folio}</td>
+    <td>${new Date(v.fecha_local).toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"})}</td>
+    <td>${v.cliente_nombre}</td>
+    <td style="text-transform:capitalize">${v.metodo_pago}</td>
+    <td style="text-align:right;font-weight:600">$${parseFloat(v.total).toFixed(2)}</td>
+  </tr>`).join("")}
+  </tbody></table>
+</div>` : ""}
+
+<div style="text-align:center;margin:16px 0">
+  <button onclick="window.print()" style="padding:10px 28px;background:#111;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;font-weight:600">🖨 Imprimir / Guardar PDF</button>
+</div>
+
+<div class="footer">
+  Generado el ${new Date().toLocaleString("es-MX", { timeZone: "America/Mexico_City" })} ·
+  ${d.negocio_nombre || ""}
+</div>
+</body></html>`;
+
+    const ventana = window.open("", "_blank", "width=720,height=900");
+    ventana.document.write(html);
+    ventana.document.close();
+    ventana.focus();
+  } catch (e) {
+    alert("Error al generar el PDF: " + e.message);
+  }
+};
+
 function CortesCaja() {
   const [corteActual, setCorteActual] = useState(null);
   const [historial, setHistorial] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [vista, setVista] = useState("principal"); // principal | abrir | cerrar
+  const [vista, setVista] = useState("principal");
   const [montoInicial, setMontoInicial] = useState("");
   const [montoCierre, setMontoCierre] = useState("");
   const [notasCierre, setNotasCierre] = useState("");
   const [procesando, setProcesando] = useState(false);
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
+  const [ultimoCorteId, setUltimoCorteId] = useState(null);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -1055,7 +1160,9 @@ function CortesCaja() {
     setProcesando(true); setError("");
     try {
       const r = await api.cerrarCorte({ monto_final_contado: parseFloat(montoCierre), notas: notasCierre || null });
-      setMsg(r.mensaje); setCorteActual(null); setVista("principal"); setMontoCierre(""); setNotasCierre(""); cargar();
+      setMsg(r.mensaje);
+      setUltimoCorteId(corteActual?.id || null);
+      setCorteActual(null); setVista("principal"); setMontoCierre(""); setNotasCierre(""); cargar();
     } catch (e) { setError(e.message); } finally { setProcesando(false); }
   };
 
@@ -1063,12 +1170,20 @@ function CortesCaja() {
 
   return (
     <div style={{ maxWidth: 680 }}>
-      {msg && <div style={{ background: "#D1FAE5", color: "#065F46", borderRadius: 8, padding: "10px 14px", fontSize: 13, marginBottom: 16 }}>{msg}</div>}
+      {msg && (
+        <div style={{ background: "#D1FAE5", color: "#065F46", borderRadius: 8, padding: "10px 14px", fontSize: 13, marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+          <span>{msg}</span>
+          {ultimoCorteId && (
+            <button onClick={() => generarPDFCorte(ultimoCorteId)} style={{ padding: "7px 16px", background: "#065F46", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
+              📄 Descargar PDF del cierre
+            </button>
+          )}
+        </div>
+      )}
       {error && <div style={{ background: "#FEE2E2", color: "#B91C1C", borderRadius: 8, padding: "10px 14px", fontSize: 13, marginBottom: 16 }}>{error}</div>}
 
       {vista === "principal" && (
         <>
-          {/* Estado actual de caja */}
           <div style={{ background: corteActual ? "rgba(5,150,105,0.08)" : "var(--color-background-secondary)", borderRadius: 14, border: `1px solid ${corteActual ? "#059669" : "var(--color-border-tertiary)"}`, padding: 20, marginBottom: 20 }}>
             {corteActual ? (
               <div>
@@ -1089,22 +1204,28 @@ function CortesCaja() {
             )}
           </div>
 
-          {/* Historial */}
           <div style={{ fontWeight: 600, marginBottom: 10 }}>Historial de cortes</div>
-          {historial.length === 0 ? <p style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>Sin cortes registrados.</p> : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {historial.filter(c => c.estado === "cerrado").map(c => (
-                <div key={c.id} style={{ background: "var(--color-background-secondary)", borderRadius: 10, border: "1px solid var(--color-border-tertiary)", padding: "14px 18px", display: "flex", flexWrap: "wrap", gap: 16, justifyContent: "space-between" }}>
-                  <div><div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>{fmtFecha(c.fecha_apertura)}</div><div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>{new Date(c.fecha_apertura).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })} — {c.fecha_cierre ? new Date(c.fecha_cierre).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" }) : "—"}</div></div>
-                  <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
-                    <div><div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Ventas</div><div style={{ fontWeight: 600 }}>{fmt(c.total_ventas || 0)}</div></div>
-                    <div><div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Fondo final</div><div style={{ fontWeight: 600 }}>{fmt(c.monto_final_contado || 0)}</div></div>
-                    <div><div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Diferencia</div><div style={{ fontWeight: 700, color: parseFloat(c.diferencia||0) === 0 ? "#059669" : parseFloat(c.diferencia||0) > 0 ? "#1D4ED8" : "#B91C1C" }}>{parseFloat(c.diferencia||0) >= 0 ? "+" : ""}{fmt(c.diferencia||0)}</div></div>
+          {historial.filter(c => c.estado === "cerrado").length === 0
+            ? <p style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>Sin cortes registrados.</p>
+            : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {historial.filter(c => c.estado === "cerrado").map(c => (
+                  <div key={c.id} style={{ background: "var(--color-background-secondary)", borderRadius: 10, border: "1px solid var(--color-border-tertiary)", padding: "14px 18px", display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>{fmtFecha(c.fecha_apertura)}</div>
+                      <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>{new Date(c.fecha_apertura).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })} — {c.fecha_cierre ? new Date(c.fecha_cierre).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" }) : "—"}</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
+                      <div><div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Ventas</div><div style={{ fontWeight: 600 }}>{fmt(c.total_ventas || 0)}</div></div>
+                      <div><div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Contado</div><div style={{ fontWeight: 600 }}>{fmt(c.monto_final_contado || 0)}</div></div>
+                      <div><div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Diferencia</div><div style={{ fontWeight: 700, color: parseFloat(c.diferencia||0) === 0 ? "#059669" : parseFloat(c.diferencia||0) > 0 ? "#1D4ED8" : "#B91C1C" }}>{parseFloat(c.diferencia||0) >= 0 ? "+" : ""}{fmt(c.diferencia||0)}</div></div>
+                      <button onClick={() => generarPDFCorte(c.id)} style={{ padding: "6px 14px", background: "var(--color-background-tertiary)", border: "1px solid var(--color-border-secondary)", borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }}>📄 PDF</button>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )
+          }
         </>
       )}
 
@@ -1135,7 +1256,7 @@ function CortesCaja() {
   );
 }
 
-// ─── Catálogos auxiliares (Categorías y Marcas) ───────────────────────────────
+
 function Catalogos() {
   const [tab, setTab] = useState("categorias");
   const [cats, setCats] = useState([]);

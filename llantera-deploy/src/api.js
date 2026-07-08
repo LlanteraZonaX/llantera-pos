@@ -141,6 +141,8 @@ export const api = {
     fetch(`${BASE}/cortes/actual`, { headers: headers() }).then(handle),
   cortesHistorial: (params = '') =>
     fetch(`${BASE}/cortes?${params}`, { headers: headers() }).then(handle),
+  corteDetalle: (id) =>
+    fetch(`${BASE}/cortes/${id}`, { headers: headers() }).then(handle),
   abrirCorte: (data) =>
     fetch(`${BASE}/cortes/abrir`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle),
   cerrarCorte: (data) =>

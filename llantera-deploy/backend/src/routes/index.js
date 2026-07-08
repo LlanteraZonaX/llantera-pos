@@ -111,6 +111,7 @@ r.get ('/movimientos',                    authenticate, movimientos.listar);
 // ── Cortes de caja ────────────────────────────────────────────────────────────
 r.get ('/cortes/actual',                  authenticate, cortes.actual);
 r.get ('/cortes',                         authenticate, cortes.historial);
+r.get ('/cortes/:id',                     authenticate, cortes.detalle);
 r.post('/cortes/abrir',                   authenticate, cortes.abrir);
 r.post('/cortes/cerrar',                  authenticate, cortes.cerrar);
 
@@ -123,7 +124,7 @@ r.get   ('/catalogos/marcas',             authenticate, catalogos.listarMarcas);
 r.post  ('/catalogos/marcas',             authenticate, authorize('admin'), catalogos.crearMarca);
 r.delete('/catalogos/marcas/:id',         authenticate, authorize('admin'), catalogos.eliminarMarca);
 
-// ── Crédito / CxC (módulo independiente — sin integrar al POS todavía) ────────
+// ── Crédito / CxC ────────────────────────────────────────────────────────────
 r.get ('/credito',                        authenticate, credito.listar);
 r.get ('/credito/:id',                    authenticate, credito.detalle);
 r.post('/credito',                        authenticate, credito.crear);
