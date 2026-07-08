@@ -2835,8 +2835,8 @@ const NAV = [
 
   // ── CAJA ────────────────────────────────────────────────────────────────────
   { id: "ventas",             icon: "🛒", label: "Punto de venta",     permiso: "ventas",        sectionLabel: "CAJA" },
-  { id: "cortes_caja",        icon: "💰", label: "Cortes de caja",     permiso: "ventas" },
-  { id: "historial_ventas",   icon: "🧾", label: "Historial",          permiso: "ventas" },
+  { id: "cortes_caja",        icon: "💰", label: "Cortes de caja",     permiso: "todo" },
+  { id: "historial_ventas",   icon: "🧾", label: "Historial",          permiso: "todo" },
 
   // ── VENTAS ──────────────────────────────────────────────────────────────────
   { id: "credito",            icon: "💳", label: "Crédito / CxC",      permiso: "todo",          sectionLabel: "VENTAS" },
