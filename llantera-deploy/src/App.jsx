@@ -2489,9 +2489,11 @@ function Ventas() {
             <div>
               <label style={labelStyle}>Fecha de la venta</label>
               <input type="date" style={inputStyle} max={hoyISO()} value={fechaVenta} onChange={e => setFechaVenta(e.target.value)} />
-              {fechaVenta && fechaVenta !== hoyISO() && (
-                <div style={{ fontSize: 11, color: "#D97706", marginTop: 4 }}>⚠ Se registrará con fecha {fmtFecha(fechaVenta)}</div>
-              )}
+          {fechaVenta && fechaVenta !== hoyISO() && (
+            <div style={{ fontSize: 11, color: "#fff", marginTop: 4 }}>
+              ⚠ Se registrará con fecha {(() => { const [y,m,d] = fechaVenta.split("-"); return `${parseInt(d)} ${["","ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"][parseInt(m)]} ${y}`; })()}
+            </div>
+          )}
             </div>
           </div>
         )}
