@@ -202,7 +202,7 @@ function ModalProducto({ producto, onClose, onSaved }) {
 // ─── Modal Nueva Compra ───────────────────────────────────────────────────────
 function ModalCompra({ onClose, onSaved, productos }) {
   const [form, setForm] = useState({ proveedor: "", fecha_recepcion: hoyISO(), num_factura: "", notas: "" });
-  const [items, setItems] = useState([{ producto_id: "", medida: "", cantidad: "", costo_unitario: "" }]);
+  const [items, setItems] = useState([{ producto_id: "", nombre_producto: "", busqueda: "", cantidad: "", costo_unitario: "", showDropdown: false }]);
   const [conIva, setConIva] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -211,15 +211,36 @@ function ModalCompra({ onClose, onSaved, productos }) {
   const iva = conIva ? subtotal * 0.16 : 0;
   const total = subtotal + iva;
 
-  const addItem = () => setItems(p => [...p, { producto_id: "", medida: "", cantidad: "", costo_unitario: "" }]);
-  const upd = (idx, k, v) => setItems(p => { const a = [...p]; a[idx][k] = v; return a; });
+  const addItem = () => setItems(p => [...p, { producto_id: "", nombre_producto: "", busqueda: "", cantidad: "", costo_unitario: "", showDropdown: false }]);
+
+  const updItem = (idx, key, val) => setItems(p => {
+    const a = [...p];
+    a[idx] = { ...a[idx], [key]: val };
+    return a;
+  });
+
+  const seleccionarProducto = (idx, prod) => setItems(p => {
+    const a = [...p];
+    a[idx] = { ...a[idx], producto_id: prod.id, nombre_producto: prod.nombre + (prod.medida ? ` (${prod.medida})` : ""), busqueda: prod.nombre + (prod.medida ? ` (${prod.medida})` : ""), showDropdown: false };
+    return a;
+  });
+
+  const productosFiltrados = (busqueda) => {
+    if (!busqueda || busqueda.length < 1) return [];
+    const q = busqueda.toLowerCase();
+    return (productos||[]).filter(p => p.nombre?.toLowerCase().includes(q) || p.medida?.toLowerCase().includes(q)).slice(0, 8);
+  };
 
   const guardar = async () => {
     const validItems = items.filter(i => i.producto_id && i.cantidad && i.costo_unitario);
     if (!validItems.length) return setError("Agrega al menos un producto con cantidad y costo");
     setLoading(true); setError("");
     try {
-      await api.crearCompra({ ...form, items: validItems.map(i => ({ producto_id: i.producto_id, cantidad: parseFloat(i.cantidad), costo_unitario: parseFloat(i.costo_unitario) })) });
+      await api.crearCompra({
+        ...form,
+        aplicar_iva: conIva,
+        items: validItems.map(i => ({ producto_id: i.producto_id, cantidad: parseFloat(i.cantidad), costo_unitario: parseFloat(i.costo_unitario) }))
+      });
       onSaved();
     } catch (e) { setError(e.message); } finally { setLoading(false); }
   };
@@ -238,16 +259,46 @@ function ModalCompra({ onClose, onSaved, productos }) {
           <div><label style={labelStyle}>No. factura</label><input style={inputStyle} placeholder="FAC-0001" value={form.num_factura} onChange={e => setForm(p => ({ ...p, num_factura: e.target.value }))} /></div>
           <div><label style={labelStyle}>Notas</label><input style={inputStyle} placeholder="Observaciones..." value={form.notas} onChange={e => setForm(p => ({ ...p, notas: e.target.value }))} /></div>
         </div>
+
         <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>Productos recibidos</div>
         {items.map((item, idx) => (
-          <div key={idx} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1.2fr 32px", gap: 6, marginBottom: 8 }}>
-            <select style={inputStyle} value={item.producto_id} onChange={e => upd(idx, "producto_id", e.target.value)}>
-              <option value="">— Seleccionar producto —</option>
-              {(productos||[]).map(p => <option key={p.id} value={p.id}>{p.nombre}{p.medida ? ` (${p.medida})` : ""}</option>)}
-            </select>
-            <input type="number" style={inputStyle} placeholder="Cantidad" value={item.cantidad} onChange={e => upd(idx, "cantidad", e.target.value)} />
-            <input type="number" style={inputStyle} placeholder="Costo unit." value={item.costo_unitario} onChange={e => upd(idx, "costo_unitario", e.target.value)} />
-            <button onClick={() => setItems(p => p.filter((_, i) => i !== idx))} disabled={items.length === 1} style={{ background: "#FEE2E2", border: "none", borderRadius: 8, cursor: "pointer", color: "#B91C1C", fontSize: 14 }}>✕</button>
+          <div key={idx} style={{ marginBottom: 10 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1.2fr 32px", gap: 6 }}>
+              {/* Buscador de producto */}
+              <div style={{ position: "relative" }}>
+                <input
+                  style={{ ...inputStyle, borderColor: item.producto_id ? "var(--color-border-secondary)" : item.busqueda ? "#F59E0B" : "var(--color-border-secondary)" }}
+                  placeholder="🔍 Buscar producto o medida..."
+                  value={item.busqueda}
+                  onChange={e => updItem(idx, "busqueda", e.target.value) || updItem(idx, "showDropdown", true) || updItem(idx, "producto_id", "")}
+                  onFocus={() => updItem(idx, "showDropdown", true)}
+                  onBlur={() => setTimeout(() => updItem(idx, "showDropdown", false), 150)}
+                  autoComplete="off"
+                />
+                {item.showDropdown && item.busqueda.length >= 1 && (
+                  <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "var(--color-background-primary)", border: "1px solid var(--color-border-secondary)", borderRadius: 8, zIndex: 200, maxHeight: 200, overflowY: "auto", boxShadow: "0 8px 24px rgba(0,0,0,0.3)" }}>
+                    {productosFiltrados(item.busqueda).length === 0
+                      ? <div style={{ padding: "10px 14px", fontSize: 12, color: "var(--color-text-secondary)" }}>Sin resultados</div>
+                      : productosFiltrados(item.busqueda).map(p => (
+                        <button key={p.id} onMouseDown={() => seleccionarProducto(idx, p)}
+                          style={{ width: "100%", padding: "8px 14px", background: "none", border: "none", cursor: "pointer", textAlign: "left", fontSize: 13, borderBottom: "1px solid var(--color-border-tertiary)" }}>
+                          <div style={{ fontWeight: 600 }}>{p.nombre}</div>
+                          {p.medida && <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>{p.medida}</div>}
+                        </button>
+                      ))
+                    }
+                  </div>
+                )}
+              </div>
+              <input type="number" style={inputStyle} placeholder="Cantidad" value={item.cantidad} onChange={e => updItem(idx, "cantidad", e.target.value)} />
+              <input type="number" style={inputStyle} placeholder="Costo unit." value={item.costo_unitario} onChange={e => updItem(idx, "costo_unitario", e.target.value)} />
+              <button onClick={() => setItems(p => p.filter((_, i) => i !== idx))} disabled={items.length === 1} style={{ background: "#FEE2E2", border: "none", borderRadius: 8, cursor: "pointer", color: "#B91C1C", fontSize: 14 }}>✕</button>
+            </div>
+            {item.producto_id && item.cantidad && item.costo_unitario && (
+              <div style={{ fontSize: 11, color: "#059669", marginTop: 3, paddingLeft: 2 }}>
+                → Subtotal línea: {fmt((parseFloat(item.cantidad)||0) * (parseFloat(item.costo_unitario)||0))}
+              </div>
+            )}
           </div>
         ))}
         <button onClick={addItem} style={{ width: "100%", padding: "7px", border: "1px dashed #93C5FD", borderRadius: 8, background: "none", color: "#1D4ED8", cursor: "pointer", fontSize: 13, marginBottom: 12 }}>+ Agregar producto</button>
