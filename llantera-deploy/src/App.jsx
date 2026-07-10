@@ -203,10 +203,14 @@ function ModalProducto({ producto, onClose, onSaved }) {
 function ModalCompra({ onClose, onSaved, productos }) {
   const [form, setForm] = useState({ proveedor: "", fecha_recepcion: hoyISO(), num_factura: "", notas: "" });
   const [items, setItems] = useState([{ producto_id: "", medida: "", cantidad: "", costo_unitario: "" }]);
+  const [conIva, setConIva] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const total = items.reduce((s, i) => s + (parseFloat(i.cantidad)||0) * (parseFloat(i.costo_unitario)||0), 0);
+  const subtotal = items.reduce((s, i) => s + (parseFloat(i.cantidad)||0) * (parseFloat(i.costo_unitario)||0), 0);
+  const iva = conIva ? subtotal * 0.16 : 0;
+  const total = subtotal + iva;
+
   const addItem = () => setItems(p => [...p, { producto_id: "", medida: "", cantidad: "", costo_unitario: "" }]);
   const upd = (idx, k, v) => setItems(p => { const a = [...p]; a[idx][k] = v; return a; });
 
@@ -246,11 +250,18 @@ function ModalCompra({ onClose, onSaved, productos }) {
             <button onClick={() => setItems(p => p.filter((_, i) => i !== idx))} disabled={items.length === 1} style={{ background: "#FEE2E2", border: "none", borderRadius: 8, cursor: "pointer", color: "#B91C1C", fontSize: 14 }}>✕</button>
           </div>
         ))}
-        <button onClick={addItem} style={{ width: "100%", padding: "7px", border: "1px dashed #93C5FD", borderRadius: 8, background: "none", color: "#1D4ED8", cursor: "pointer", fontSize: 13, marginBottom: 16 }}>+ Agregar producto</button>
+        <button onClick={addItem} style={{ width: "100%", padding: "7px", border: "1px dashed #93C5FD", borderRadius: 8, background: "none", color: "#1D4ED8", cursor: "pointer", fontSize: 13, marginBottom: 12 }}>+ Agregar producto</button>
+
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, marginBottom: 12, cursor: "pointer", userSelect: "none", padding: "7px 10px", borderRadius: 6, border: conIva ? "1px solid #3B82F6" : "1px solid var(--color-border-tertiary)", background: conIva ? "rgba(59,130,246,0.08)" : "transparent" }}>
+          <input type="checkbox" checked={conIva} onChange={e => setConIva(e.target.checked)} style={{ width: 14, height: 14, cursor: "pointer", accentColor: "#3B82F6" }} />
+          <span>Incluir IVA <strong>+16%</strong> en esta compra</span>
+          {conIva && <span style={{ marginLeft: "auto", fontSize: 11, color: "#60A5FA" }}>+{fmt(iva)}</span>}
+        </label>
+
         <div style={{ background: "var(--color-background-tertiary)", borderRadius: 10, padding: "12px 16px", marginBottom: 16 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}><span style={{ color: "var(--color-text-secondary)" }}>Subtotal</span><span>{fmt(total)}</span></div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}><span style={{ color: "var(--color-text-secondary)" }}>IVA 16%</span><span>{fmt(total * 0.16)}</span></div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 600, fontSize: 15, marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--color-border-tertiary)" }}><span>Total</span><span style={{ color: "#1D4ED8" }}>{fmt(total * 1.16)}</span></div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}><span style={{ color: "var(--color-text-secondary)" }}>Subtotal</span><span>{fmt(subtotal)}</span></div>
+          {conIva && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginTop: 4 }}><span style={{ color: "var(--color-text-secondary)" }}>IVA 16%</span><span>{fmt(iva)}</span></div>}
+          <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 600, fontSize: 15, marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--color-border-tertiary)" }}><span>Total</span><span style={{ color: "#1D4ED8" }}>{fmt(total)}</span></div>
         </div>
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
           <button onClick={onClose} style={{ padding: "9px 20px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
