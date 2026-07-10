@@ -200,12 +200,22 @@ function ModalProducto({ producto, onClose, onSaved }) {
 }
 
 // ─── Modal Nueva Compra ───────────────────────────────────────────────────────
-function ModalCompra({ onClose, onSaved, productos }) {
+function ModalCompra({ onClose, onSaved }) {
   const [form, setForm] = useState({ proveedor: "", fecha_recepcion: hoyISO(), num_factura: "", notas: "" });
   const [items, setItems] = useState([{ producto_id: "", nombre_producto: "", busqueda: "", cantidad: "", costo_unitario: "", showDropdown: false }]);
   const [conIva, setConIva] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [productosModal, setProductosModal] = useState([]);
+  const [cargandoProds, setCargandoProds] = useState(true);
+
+  // Carga fresca de TODOS los productos al abrir el modal
+  useEffect(() => {
+    api.productos("limit=500")
+      .then(r => setProductosModal((r.data || []).filter(p => !p.es_servicio)))
+      .catch(() => {})
+      .finally(() => setCargandoProds(false));
+  }, []);
 
   const subtotal = items.reduce((s, i) => s + (parseFloat(i.cantidad)||0) * (parseFloat(i.costo_unitario)||0), 0);
   const iva = conIva ? subtotal * 0.16 : 0;
@@ -221,14 +231,17 @@ function ModalCompra({ onClose, onSaved, productos }) {
 
   const seleccionarProducto = (idx, prod) => setItems(p => {
     const a = [...p];
-    a[idx] = { ...a[idx], producto_id: prod.id, nombre_producto: prod.nombre + (prod.medida ? ` (${prod.medida})` : ""), busqueda: prod.nombre + (prod.medida ? ` (${prod.medida})` : ""), showDropdown: false };
+    const label = prod.nombre + (prod.medida ? ` (${prod.medida})` : "");
+    a[idx] = { ...a[idx], producto_id: prod.id, nombre_producto: label, busqueda: label, showDropdown: false };
     return a;
   });
 
   const productosFiltrados = (busqueda) => {
     if (!busqueda || busqueda.length < 1) return [];
     const q = busqueda.toLowerCase();
-    return (productos||[]).filter(p => p.nombre?.toLowerCase().includes(q) || p.medida?.toLowerCase().includes(q)).slice(0, 8);
+    return productosModal.filter(p =>
+      p.nombre?.toLowerCase().includes(q) || p.medida?.toLowerCase().includes(q) || p.marca?.toLowerCase().includes(q)
+    ).slice(0, 10);
   };
 
   const guardar = async () => {
@@ -260,30 +273,31 @@ function ModalCompra({ onClose, onSaved, productos }) {
           <div><label style={labelStyle}>Notas</label><input style={inputStyle} placeholder="Observaciones..." value={form.notas} onChange={e => setForm(p => ({ ...p, notas: e.target.value }))} /></div>
         </div>
 
-        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>Productos recibidos</div>
+        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>
+          Productos recibidos {cargandoProds && <span style={{ fontWeight: 400, fontSize: 11, color: "var(--color-text-secondary)" }}>— cargando productos...</span>}
+        </div>
         {items.map((item, idx) => (
           <div key={idx} style={{ marginBottom: 10 }}>
             <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1.2fr 32px", gap: 6 }}>
-              {/* Buscador de producto */}
               <div style={{ position: "relative" }}>
                 <input
-                  style={{ ...inputStyle, borderColor: item.producto_id ? "var(--color-border-secondary)" : item.busqueda ? "#F59E0B" : "var(--color-border-secondary)" }}
-                  placeholder="🔍 Buscar producto o medida..."
+                  style={{ ...inputStyle, borderColor: item.producto_id ? "#059669" : "var(--color-border-secondary)" }}
+                  placeholder="🔍 Buscar por nombre o medida..."
                   value={item.busqueda}
-                  onChange={e => updItem(idx, "busqueda", e.target.value) || updItem(idx, "showDropdown", true) || updItem(idx, "producto_id", "")}
+                  onChange={e => { updItem(idx, "busqueda", e.target.value); updItem(idx, "showDropdown", true); updItem(idx, "producto_id", ""); }}
                   onFocus={() => updItem(idx, "showDropdown", true)}
                   onBlur={() => setTimeout(() => updItem(idx, "showDropdown", false), 150)}
                   autoComplete="off"
                 />
                 {item.showDropdown && item.busqueda.length >= 1 && (
-                  <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "var(--color-background-primary)", border: "1px solid var(--color-border-secondary)", borderRadius: 8, zIndex: 200, maxHeight: 200, overflowY: "auto", boxShadow: "0 8px 24px rgba(0,0,0,0.3)" }}>
+                  <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "var(--color-background-primary)", border: "1px solid var(--color-border-secondary)", borderRadius: 8, zIndex: 200, maxHeight: 220, overflowY: "auto", boxShadow: "0 8px 24px rgba(0,0,0,0.3)" }}>
                     {productosFiltrados(item.busqueda).length === 0
-                      ? <div style={{ padding: "10px 14px", fontSize: 12, color: "var(--color-text-secondary)" }}>Sin resultados</div>
+                      ? <div style={{ padding: "10px 14px", fontSize: 12, color: "var(--color-text-secondary)" }}>Sin resultados — prueba con otro término</div>
                       : productosFiltrados(item.busqueda).map(p => (
                         <button key={p.id} onMouseDown={() => seleccionarProducto(idx, p)}
                           style={{ width: "100%", padding: "8px 14px", background: "none", border: "none", cursor: "pointer", textAlign: "left", fontSize: 13, borderBottom: "1px solid var(--color-border-tertiary)" }}>
                           <div style={{ fontWeight: 600 }}>{p.nombre}</div>
-                          {p.medida && <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>{p.medida}</div>}
+                          <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>{[p.medida, p.marca].filter(Boolean).join(" · ")}</div>
                         </button>
                       ))
                     }
@@ -296,7 +310,7 @@ function ModalCompra({ onClose, onSaved, productos }) {
             </div>
             {item.producto_id && item.cantidad && item.costo_unitario && (
               <div style={{ fontSize: 11, color: "#059669", marginTop: 3, paddingLeft: 2 }}>
-                → Subtotal línea: {fmt((parseFloat(item.cantidad)||0) * (parseFloat(item.costo_unitario)||0))}
+                ✓ {item.nombre_producto} → {fmt((parseFloat(item.cantidad)||0) * (parseFloat(item.costo_unitario)||0))}
               </div>
             )}
           </div>

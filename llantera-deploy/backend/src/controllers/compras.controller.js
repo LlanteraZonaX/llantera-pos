@@ -80,10 +80,12 @@ export const crear = async (req, res) => {
     const folio = await generarFolio(client, negocio_id);
 
     const { rows: [compra] } = await client.query(
-      `INSERT INTO compras (negocio_id, folio, proveedor, fecha_recepcion, num_factura, notas, subtotal, iva, total, usuario_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-      [negocio_id, folio, proveedor || null, fecha_recepcion || new Date(),
-       num_factura || null, notas || null, subtotal, iva, total, req.user.id]
+      `INSERT INTO compras (negocio_id, folio, fecha_recepcion, num_factura, notas, subtotal, iva, total, usuario_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [negocio_id, folio, fecha_recepcion || new Date(),
+       num_factura || null,
+       notas ? `${proveedor ? "Proveedor: " + proveedor + " | " : ""}${notas}` : (proveedor || null),
+       subtotal, iva, total, req.user.id]
     );
 
     for (const { prod, cant, costo } of detalles) {
