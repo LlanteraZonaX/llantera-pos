@@ -46,6 +46,8 @@ export const api = {
   // Ventas
   ventas: (params = '') =>
     fetch(`${BASE}/ventas?${params}`, { headers: headers() }).then(handle),
+  ventaDetalle: (id) =>
+    fetch(`${BASE}/ventas/${id}`, { headers: headers() }).then(handle),
   crearVenta: (data) =>
     fetch(`${BASE}/ventas`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle),
 

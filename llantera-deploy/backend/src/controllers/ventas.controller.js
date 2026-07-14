@@ -50,12 +50,8 @@ export const crear = async (req, res) => {
     } = req.body;
 
     if (!items?.length) throw new Error('La venta debe tener al menos un producto');
-
-    // Validar que la fecha no sea futura. $fecha es "YYYY-MM-DD" o null.
-    // Comparamos solo el string de fecha para evitar ambigüedades de timezone.
-    if (fecha) {
-      const hoyMexico = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Mexico_City' });
-      if (fecha > hoyMexico) throw new Error('La fecha de la venta no puede ser en el futuro');
+    if (fecha && new Date(fecha) > new Date(Date.now() + 5 * 60 * 1000)) {
+      throw new Error('La fecha de la venta no puede ser en el futuro');
     }
 
     let subtotal = 0;
@@ -89,12 +85,7 @@ export const crear = async (req, res) => {
     const { rows: [venta] } = await client.query(
       `INSERT INTO ventas (folio, cliente_id, usuario_id, fecha, subtotal, descuento, iva, total,
          metodo_pago, monto_pagado, cambio, requiere_factura, estado, notas, negocio_id)
-       VALUES ($1,$2,$3,
-         COALESCE(
-           ($4::date)::timestamp AT TIME ZONE 'America/Mexico_City',
-           NOW()
-         ),
-         $5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
+       VALUES ($1,$2,$3, COALESCE($4::timestamp AT TIME ZONE 'America/Mexico_City', NOW()), $5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
       [folio, cliente_id, req.user.id, fecha || null, subtotal, descuento, iva, total,
        metodo_pago || 'efectivo', monto_pagado || total, cambio,
        requiere_factura, estado, notas, negocio_id]
@@ -162,5 +153,44 @@ export const resumenDia = async (req, res) => {
     res.json(resumen);
   } catch (err) {
     res.status(500).json({ error: 'Error al obtener resumen del día' });
+  }
+};
+
+// Detalle de una venta por ID — para la previsualización del ticket
+export const obtener = async (req, res) => {
+  try {
+    const negocio_id = req.user.negocio_id;
+    const { rows: [venta] } = await query(
+      `SELECT v.*,
+              (v.fecha AT TIME ZONE 'America/Mexico_City') as fecha_local,
+              COALESCE(c.nombre, 'Cliente general') as cliente_nombre,
+              c.telefono as cliente_telefono,
+              u.nombre as cajero_nombre,
+              n.nombre as negocio_nombre,
+              n.logo_url, n.telefono as negocio_telefono,
+              n.direccion as negocio_direccion
+       FROM ventas v
+       LEFT JOIN clientes c ON v.cliente_id = c.id
+       LEFT JOIN usuarios u ON v.usuario_id = u.id
+       JOIN negocios n ON v.negocio_id = n.id
+       WHERE v.id = $1 AND v.negocio_id = $2`,
+      [req.params.id, negocio_id]
+    );
+    if (!venta) return res.status(404).json({ error: 'Venta no encontrada' });
+
+    const { rows: items } = await query(
+      `SELECT vd.cantidad, vd.precio_unitario, vd.subtotal,
+              p.nombre as producto_nombre, p.medida as producto_medida
+       FROM ventas_detalle vd
+       JOIN productos p ON vd.producto_id = p.id
+       WHERE vd.venta_id = $1
+       ORDER BY p.nombre`,
+      [venta.id]
+    );
+
+    res.json({ ...venta, items });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al obtener detalle de la venta' });
   }
 };

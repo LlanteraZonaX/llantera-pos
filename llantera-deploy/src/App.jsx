@@ -2590,11 +2590,167 @@ const ESTADO_VENTA_INFO = {
   cancelada: { label: "Cancelada", bg: "#FEE2E2", color: "#B91C1C" },
 };
 
+function ModalTicket({ ventaId, onClose }) {
+  const [venta, setVenta] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    api.ventaDetalle(ventaId)
+      .then(setVenta)
+      .catch(e => setError(e.message || "No se pudo cargar el ticket"))
+      .finally(() => setLoading(false));
+  }, [ventaId]);
+
+  const imprimir = () => {
+    if (!venta) return;
+    const fmtH = (ts) => new Date(ts).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+    const fmtD = (ts) => new Date(ts).toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" });
+    const tieneDesc = parseFloat(venta.descuento || 0) > 0;
+    const tieneIva  = parseFloat(venta.iva || 0) > 0;
+
+    const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+<title>Ticket ${venta.folio}</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: 'Courier New', monospace; font-size: 12px; color:#111; max-width:320px; margin:0 auto; padding:16px; }
+  .center { text-align:center; }
+  .logo { width:60px; height:60px; border-radius:8px; object-fit:cover; margin:0 auto 6px; display:block; }
+  h1 { font-size:14px; font-weight:700; text-align:center; margin:4px 0; }
+  .sub { font-size:10px; color:#555; text-align:center; margin-bottom:2px; }
+  .sep { border:none; border-top:1px dashed #888; margin:8px 0; }
+  table { width:100%; border-collapse:collapse; font-size:11px; }
+  th { text-align:left; font-size:10px; color:#555; padding:2px 0; }
+  td { padding:3px 0; vertical-align:top; }
+  td.r { text-align:right; white-space:nowrap; }
+  .total-row { font-weight:700; font-size:13px; border-top:1px solid #111; padding-top:4px; }
+  .footer { font-size:10px; color:#777; text-align:center; margin-top:12px; }
+  button { display:block; margin:12px auto 0; padding:8px 24px; background:#111; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:12px; }
+  @media print { button { display:none !important; } }
+</style></head><body>
+<div class="center">
+  ${venta.logo_url ? `<img src="${venta.logo_url}" class="logo" alt="">` : ""}
+  <h1>${venta.negocio_nombre || "Ticket de venta"}</h1>
+  ${venta.negocio_direccion ? `<div class="sub">${venta.negocio_direccion}</div>` : ""}
+  ${venta.negocio_telefono ? `<div class="sub">Tel: ${venta.negocio_telefono}</div>` : ""}
+</div>
+<hr class="sep">
+<div style="font-size:11px">
+  <div><b>Folio:</b> ${venta.folio}</div>
+  <div><b>Fecha:</b> ${fmtD(venta.fecha_local || venta.fecha)}</div>
+  <div><b>Hora:</b> ${fmtH(venta.fecha_local || venta.fecha)}</div>
+  <div><b>Cliente:</b> ${venta.cliente_nombre || "Cliente general"}</div>
+  <div><b>Cajero:</b> ${venta.cajero_nombre || "—"}</div>
+  <div><b>Pago:</b> <span style="text-transform:capitalize">${venta.metodo_pago}</span></div>
+</div>
+<hr class="sep">
+<table>
+  <thead><tr><th>Producto</th><th class="r">Cant</th><th class="r">P.U.</th><th class="r">Importe</th></tr></thead>
+  <tbody>
+    ${(venta.items || []).map(i => `
+      <tr>
+        <td>${i.producto_nombre}${i.producto_medida ? `<br><span style="font-size:10px;color:#555">${i.producto_medida}</span>` : ""}</td>
+        <td class="r">${parseFloat(i.cantidad)}</td>
+        <td class="r">$${parseFloat(i.precio_unitario).toFixed(2)}</td>
+        <td class="r">$${parseFloat(i.subtotal).toFixed(2)}</td>
+      </tr>`).join("")}
+  </tbody>
+</table>
+<hr class="sep">
+<table>
+  <tr><td>Subtotal</td><td class="r">$${parseFloat(venta.subtotal || 0).toFixed(2)}</td></tr>
+  ${tieneDesc ? `<tr><td>Descuento</td><td class="r">-$${parseFloat(venta.descuento).toFixed(2)}</td></tr>` : ""}
+  ${tieneIva  ? `<tr><td>IVA 16%</td><td class="r">$${parseFloat(venta.iva).toFixed(2)}</td></tr>` : ""}
+  <tr class="total-row"><td>TOTAL</td><td class="r">$${parseFloat(venta.total).toFixed(2)}</td></tr>
+  ${parseFloat(venta.cambio || 0) > 0 ? `<tr><td style="color:#059669">Cambio</td><td class="r" style="color:#059669">$${parseFloat(venta.cambio).toFixed(2)}</td></tr>` : ""}
+</table>
+${venta.notas ? `<hr class="sep"><div style="font-size:10px;color:#555">Nota: ${venta.notas}</div>` : ""}
+<div class="footer">¡Gracias por su compra!<br>${venta.negocio_nombre || ""}</div>
+<button onclick="window.print()">🖨 Imprimir ticket</button>
+</body></html>`;
+
+    const w = window.open("", "_blank", "width=380,height=700");
+    w.document.write(html); w.document.close(); w.focus();
+  };
+
+  return (
+    <div style={overlayStyle}>
+      <div style={{ ...modalBase, maxWidth: 540 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
+            🧾 {venta ? venta.folio : "Cargando ticket..."}
+          </h2>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)" }}>✕</button>
+        </div>
+
+        {loading && <div style={{ textAlign: "center", padding: 40, color: "var(--color-text-secondary)" }}>Cargando...</div>}
+        {error && <div style={{ background: "#FEE2E2", color: "#B91C1C", borderRadius: 8, padding: "10px 14px", fontSize: 13 }}>{error}</div>}
+
+        {venta && (
+          <>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16, fontSize: 13 }}>
+              <div style={{ background: "var(--color-background-secondary)", borderRadius: 8, padding: "10px 14px" }}>
+                <div style={{ fontSize: 10, color: "var(--color-text-secondary)", textTransform: "uppercase", marginBottom: 2 }}>Fecha / Hora</div>
+                <div style={{ fontWeight: 600 }}>{new Date(venta.fecha_local || venta.fecha).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" })}</div>
+                <div style={{ color: "var(--color-text-secondary)", fontSize: 11 }}>{new Date(venta.fecha_local || venta.fecha).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}</div>
+              </div>
+              <div style={{ background: "var(--color-background-secondary)", borderRadius: 8, padding: "10px 14px" }}>
+                <div style={{ fontSize: 10, color: "var(--color-text-secondary)", textTransform: "uppercase", marginBottom: 2 }}>Cliente / Cajero</div>
+                <div style={{ fontWeight: 600 }}>{venta.cliente_nombre || "Cliente general"}</div>
+                <div style={{ color: "var(--color-text-secondary)", fontSize: 11 }}>{venta.cajero_nombre}</div>
+              </div>
+            </div>
+
+            <div style={{ background: "var(--color-background-secondary)", borderRadius: 10, border: "1px solid var(--color-border-tertiary)", marginBottom: 14, overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead><tr style={{ background: "var(--color-background-tertiary)" }}>
+                  {["Producto", "Cant.", "P.U.", "Importe"].map((h, i) =>
+                    <th key={h} style={{ padding: "8px 12px", textAlign: i > 1 ? "right" : "left", fontSize: 10, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase" }}>{h}</th>)}
+                </tr></thead>
+                <tbody>
+                  {(venta.items || []).map((item, i) => (
+                    <tr key={i} style={{ borderTop: "1px solid var(--color-border-tertiary)" }}>
+                      <td style={{ padding: "8px 12px" }}>
+                        <div style={{ fontWeight: 600, fontSize: 12 }}>{item.producto_nombre}</div>
+                        {item.producto_medida && <div style={{ fontSize: 10, color: "var(--color-text-secondary)" }}>{item.producto_medida}</div>}
+                      </td>
+                      <td style={{ padding: "8px 12px", textAlign: "right" }}>{parseFloat(item.cantidad)}</td>
+                      <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--color-text-secondary)" }}>{fmt(item.precio_unitario)}</td>
+                      <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 600 }}>{fmt(item.subtotal)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ background: "var(--color-background-tertiary)", borderRadius: 8, padding: "10px 14px", marginBottom: 14 }}>
+              {parseFloat(venta.descuento || 0) > 0 && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 4 }}><span style={{ color: "var(--color-text-secondary)" }}>Descuento</span><span style={{ color: "#059669" }}>-{fmt(venta.descuento)}</span></div>}
+              {parseFloat(venta.iva || 0) > 0 && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 4 }}><span style={{ color: "var(--color-text-secondary)" }}>IVA 16%</span><span>{fmt(venta.iva)}</span></div>}
+              <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800, fontSize: 18 }}>
+                <span>Total</span><span style={{ color: "#60A5FA" }}>{fmt(venta.total)}</span>
+              </div>
+              {parseFloat(venta.cambio || 0) > 0 && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginTop: 4 }}><span style={{ color: "#059669" }}>Cambio entregado</span><span style={{ color: "#059669", fontWeight: 600 }}>{fmt(venta.cambio)}</span></div>}
+            </div>
+
+            {venta.notas && <div style={{ fontSize: 12, color: "var(--color-text-secondary)", background: "var(--color-background-secondary)", borderRadius: 6, padding: "8px 12px", marginBottom: 14 }}>📝 {venta.notas}</div>}
+
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button onClick={onClose} style={{ padding: "9px 18px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13 }}>Cerrar</button>
+              <button onClick={imprimir} style={{ padding: "9px 20px", background: "#111", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>🖨 Imprimir ticket</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function HistorialVentas() {
   const [desde, setDesde] = useState(hoyISO());
   const [hasta, setHasta] = useState(hoyISO());
   const [ventas, setVentas] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [ticketId, setTicketId] = useState(null);
 
   const cargar = useCallback(() => {
     setLoading(true);
@@ -2626,38 +2782,29 @@ function HistorialVentas() {
       </div>
 
       <div style={{ display: "flex", gap: 16, marginBottom: 16, flexWrap: "wrap" }}>
-        <div style={{ background: "var(--color-background-secondary)", borderRadius: 10, padding: "12px 18px", border: "1px solid var(--color-border-tertiary)" }}>
-          <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Ventas pagadas</div>
-          <div style={{ fontSize: 18, fontWeight: 700 }}>{totales.pagadas}</div>
-        </div>
-        <div style={{ background: "var(--color-background-secondary)", borderRadius: 10, padding: "12px 18px", border: "1px solid var(--color-border-tertiary)" }}>
-          <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Total cobrado</div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "#1D4ED8" }}>{fmt(totales.total)}</div>
-        </div>
-        <div style={{ background: "var(--color-background-secondary)", borderRadius: 10, padding: "12px 18px", border: "1px solid var(--color-border-tertiary)" }}>
-          <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Efectivo</div>
-          <div style={{ fontSize: 18, fontWeight: 700 }}>{fmt(totales.efectivo || 0)}</div>
-        </div>
-        <div style={{ background: "var(--color-background-secondary)", borderRadius: 10, padding: "12px 18px", border: "1px solid var(--color-border-tertiary)" }}>
-          <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Tarjeta</div>
-          <div style={{ fontSize: 18, fontWeight: 700 }}>{fmt(totales.tarjeta || 0)}</div>
-        </div>
-        <div style={{ background: "var(--color-background-secondary)", borderRadius: 10, padding: "12px 18px", border: "1px solid var(--color-border-tertiary)" }}>
-          <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Transferencia</div>
-          <div style={{ fontSize: 18, fontWeight: 700 }}>{fmt(totales.transferencia || 0)}</div>
-        </div>
+        {[["Ventas pagadas", totales.pagadas, "var(--color-text-primary)", v => v],
+          ["Total cobrado", totales.total, "#1D4ED8", fmt],
+          ["Efectivo", totales.efectivo || 0, "var(--color-text-primary)", fmt],
+          ["Tarjeta", totales.tarjeta || 0, "var(--color-text-primary)", fmt],
+          ["Transferencia", totales.transferencia || 0, "var(--color-text-primary)", fmt],
+        ].map(([label, val, color, f]) => (
+          <div key={label} style={{ background: "var(--color-background-secondary)", borderRadius: 10, padding: "12px 18px", border: "1px solid var(--color-border-tertiary)" }}>
+            <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>{label}</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color }}>{f(val)}</div>
+          </div>
+        ))}
       </div>
 
       {loading ? <div style={{ textAlign: "center", padding: 40, color: "var(--color-text-secondary)" }}>Cargando...</div> : (
         <div style={{ background: "var(--color-background-secondary)", borderRadius: 12, border: "1px solid var(--color-border-tertiary)", overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead><tr style={{ background: "var(--color-background-tertiary)" }}>
-              {["Folio", "Hora", "Cliente", "Cajero", "Método de pago", "Notas", "Total", "Estado"].map(h =>
-                <th key={h} style={{ padding: "10px 14px", textAlign: (h === "Total") ? "right" : "left", fontWeight: 600, fontSize: 11, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{h}</th>)}
+              {["Folio", "Hora", "Cliente", "Cajero", "Método", "Notas", "Total", "Estado", ""].map(h =>
+                <th key={h} style={{ padding: "10px 14px", textAlign: h === "Total" ? "right" : "left", fontWeight: 600, fontSize: 11, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{h}</th>)}
             </tr></thead>
             <tbody>
               {ventas.length === 0
-                ? <tr><td colSpan={8} style={{ padding: 40, textAlign: "center", color: "var(--color-text-secondary)" }}>No hay ventas en este rango de fechas.</td></tr>
+                ? <tr><td colSpan={9} style={{ padding: 40, textAlign: "center", color: "var(--color-text-secondary)" }}>No hay ventas en este rango de fechas.</td></tr>
                 : ventas.map(v => {
                   const estadoInfo = ESTADO_VENTA_INFO[v.estado] || ESTADO_VENTA_INFO.pagada;
                   return (
@@ -2667,9 +2814,12 @@ function HistorialVentas() {
                       <td style={{ padding: "10px 14px" }}>{v.cliente_nombre || "Cliente general"}</td>
                       <td style={{ padding: "10px 14px", color: "var(--color-text-secondary)" }}>{v.cajero_nombre || "—"}</td>
                       <td style={{ padding: "10px 14px", textTransform: "capitalize" }}>{v.metodo_pago}</td>
-                      <td style={{ padding: "10px 14px", color: "var(--color-text-secondary)", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.notas || "—"}</td>
+                      <td style={{ padding: "10px 14px", color: "var(--color-text-secondary)", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.notas || "—"}</td>
                       <td style={{ padding: "10px 14px", textAlign: "right", fontWeight: 700, color: "#1D4ED8" }}>{fmt(v.total)}</td>
                       <td style={{ padding: "10px 14px" }}><span style={{ background: estadoInfo.bg, color: estadoInfo.color, fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20 }}>{estadoInfo.label}</span></td>
+                      <td style={{ padding: "8px 14px" }}>
+                        <button onClick={() => setTicketId(v.id)} style={{ padding: "5px 12px", background: "var(--color-background-tertiary)", border: "1px solid var(--color-border-secondary)", borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }}>🧾 Ver</button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -2677,6 +2827,8 @@ function HistorialVentas() {
           </table>
         </div>
       )}
+
+      {ticketId && <ModalTicket ventaId={ticketId} onClose={() => setTicketId(null)} />}
     </div>
   );
 }

@@ -63,6 +63,7 @@ r.delete('/gastos/:id',                   authenticate, gastos.eliminar);
 // ── Ventas ────────────────────────────────────────────────────────────────────
 r.get ('/ventas',                         authenticate, ventas.listar);
 r.get ('/ventas/resumen',                 authenticate, ventas.resumenDia);
+r.get ('/ventas/:id',                     authenticate, ventas.obtener);
 r.post('/ventas',                         authenticate, ventas.crear);
 
 // ── Órdenes de servicio ───────────────────────────────────────────────────────
