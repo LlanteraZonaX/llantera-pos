@@ -392,7 +392,7 @@ function ModalGasto({ onClose, onSaved }) {
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 function Dashboard({ setSeccion, onNuevaCompra, onNuevoGasto, onVerStockBajo }) {
   const isMobile = useIsMobile();
-  const [data, setData] = useState(null);
+  const [data, setData]     = useState(null);
   const [loading, setLoading] = useState(true);
 
   const cargar = useCallback(async () => {
@@ -405,77 +405,139 @@ function Dashboard({ setSeccion, onNuevaCompra, onNuevoGasto, onVerStockBajo }) 
 
   if (loading) return <div style={{ display: "flex", justifyContent: "center", padding: 60, color: "var(--color-text-secondary)" }}>Cargando datos...</div>;
 
-  const k = data?.kpis || {};
-  const semana = data?.ventas_semana || [];
-  const top = data?.top_productos || [];
-  const ultimas = data?.ultimas_ventas || [];
+  const s = data?.semana || {};
+  const alertas = data?.alertas || {};
+  const diasSemana = data?.ventas_por_dia || [];
+  const productos  = data?.productos_semana || [];
+  const ultimas    = data?.ultimas_ventas || [];
+
+  const utilidadColor = parseFloat(s.utilidad_neta || 0) >= 0 ? "#34D399" : "#F87171";
+  const margenColor   = parseFloat(s.margen_bruto  || 0) >= 20 ? "#34D399"
+                      : parseFloat(s.margen_bruto  || 0) >= 0  ? "#FBBF24" : "#F87171";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* ── Banner "Vender ahora" ─────────────────────────────────────────── */}
-      <button onClick={() => setSeccion("ventas")} style={{ display: "flex", alignItems: "center", gap: 20, background: "linear-gradient(135deg, #1D4ED8 0%, #1e40af 100%)", borderRadius: 14, padding: isMobile ? "18px 20px" : "22px 28px", border: "none", cursor: "pointer", color: "#fff", textAlign: "left", boxShadow: "0 6px 24px rgba(29,78,216,0.35)", transition: "transform 0.15s" }}>
-        <div style={{ width: 48, height: 48, borderRadius: 12, background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, flexShrink: 0 }}>🛒</div>
-        <div>
-          <div style={{ fontWeight: 800, fontSize: isMobile ? 17 : 20, letterSpacing: "-0.02em" }}>Punto de venta</div>
-          <div style={{ fontSize: 13, opacity: 0.75, marginTop: 2 }}>Registrar una nueva venta</div>
-        </div>
-        <div style={{ marginLeft: "auto", fontSize: 22, opacity: 0.6 }}>→</div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+
+      {/* ── Banner Punto de venta ──────────────────────────────────────────── */}
+      <button onClick={() => setSeccion("ventas")} style={{ display: "flex", alignItems: "center", gap: 20, background: "linear-gradient(135deg,#1D4ED8,#1e40af)", borderRadius: 14, padding: isMobile ? "18px 20px" : "20px 28px", border: "none", cursor: "pointer", color: "#fff", textAlign: "left", boxShadow: "0 6px 24px rgba(29,78,216,0.3)" }}>
+        <div style={{ width: 46, height: 46, borderRadius: 12, background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>🛒</div>
+        <div><div style={{ fontWeight: 800, fontSize: isMobile ? 16 : 19 }}>Punto de venta</div><div style={{ fontSize: 12, opacity: 0.75, marginTop: 2 }}>Registrar una nueva venta</div></div>
+        <div style={{ marginLeft: "auto", fontSize: 20, opacity: 0.6 }}>→</div>
       </button>
 
-      {/* ── Acciones rápidas ─────────────────────────────────────────────── */}
-      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", flexWrap: "wrap" }}>
-        <button onClick={onNuevaCompra} style={{ padding: "8px 16px", background: "var(--color-background-secondary)", border: "1px solid var(--color-border-secondary)", borderRadius: 9, cursor: "pointer", fontSize: 13, color: "#fff" }}>🚚 Nueva compra</button>
-        <button onClick={onNuevoGasto} style={{ padding: "8px 16px", background: "#0F766E", color: "#fff", border: "none", borderRadius: 9, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>+ Gasto</button>
-        <button onClick={cargar} style={{ padding: "8px 12px", background: "var(--color-background-tertiary)", border: "1px solid var(--color-border-secondary)", borderRadius: 9, cursor: "pointer", fontSize: 13 }}>↻ Actualizar</button>
+      {/* ── Acciones rápidas ──────────────────────────────────────────────── */}
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
+        <button onClick={onNuevaCompra} style={{ padding: "7px 14px", background: "var(--color-background-secondary)", border: "1px solid var(--color-border-secondary)", borderRadius: 8, cursor: "pointer", fontSize: 12, color: "#fff" }}>🚚 Nueva compra</button>
+        <button onClick={onNuevoGasto}  style={{ padding: "7px 14px", background: "#0F766E", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>+ Gasto</button>
+        <button onClick={cargar}        style={{ padding: "7px 12px", background: "var(--color-background-tertiary)", border: "1px solid var(--color-border-secondary)", borderRadius: 8, cursor: "pointer", fontSize: 12 }}>↻</button>
       </div>
 
-      {/* ── KPIs ─────────────────────────────────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(155px, 1fr))", gap: 12 }}>
-        <KpiCard icono="💰" label="Ingresos hoy" valor={fmt(k.ingresos_hoy)} sub={`${k.num_ventas||0} ventas`} color="#1D4ED8" />
-        <KpiCard icono="💵" label="Efectivo" valor={fmt(k.efectivo)} sub="del día" color="#065F46" />
-        <KpiCard icono="💳" label="Tarjeta" valor={fmt(k.tarjeta)} sub="del día" color="#7C3AED" />
-        <KpiCard icono="🔧" label="Órdenes activas" valor={(k.en_espera||0)+(k.en_proceso||0)+(k.listo||0)} sub={`${k.listo||0} lista(s) p/ entregar`} color="#B45309" />
-        <KpiCard icono="📦" label="Stock bajo" valor={k.stock_bajo||0} sub="productos" color="#DC2626" alerta={(k.stock_bajo||0) > 0} onClick={onVerStockBajo} />
-        <KpiCard icono="💳" label="Cuentas × cobrar" valor={fmt(k.total_cxc)} sub={`${k.num_pendientes||0} clientes`} color="#92400E" />
+      {/* ── SECCIÓN: P&L de la semana ─────────────────────────────────────── */}
+      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--color-text-secondary)" }}>RESUMEN — ÚLTIMOS 7 DÍAS</div>
+
+      {/* Fila 1: Ingresos / Costo / Utilidad bruta / Margen */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(145px,1fr))", gap: 10 }}>
+        <KpiCard icono="💰" label="Ventas semana"    valor={fmt(s.total_ventas)}   sub={`${s.num_ventas||0} transacciones`} color="#60A5FA" />
+        <KpiCard icono="📦" label="Costo de ventas"  valor={fmt(s.costo_total)}    sub="precio compra × unidades"           color="#94A3B8" />
+        <KpiCard icono="📈" label="Utilidad bruta"   valor={fmt(s.utilidad_bruta)} sub={`Gastos: ${fmt(s.total_gastos)}`}   color={utilidadColor} />
+        <KpiCard icono="🎯" label="Utilidad neta"    valor={fmt(s.utilidad_neta)}  sub="ventas − costo − gastos"            color={utilidadColor} />
+        <KpiCard icono="%" label="Margen bruto"      valor={`${s.margen_bruto||0}%`} sub="utilidad / ventas"               color={margenColor} />
+        <KpiCard icono="🧾" label="Ticket promedio"  valor={fmt(s.ticket_promedio)} sub={`${s.num_ventas||0} tickets`}      color="#A78BFA" />
       </div>
 
-      {/* ── Gráfica + Top productos + Últimas ventas ──────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1.2fr", gap: 16 }}>
-        <Card titulo="Ventas — últimos 7 días">
-          <BarChart data={semana.map((d, i) => ({ ...d, dia: i === semana.length-1 ? "Hoy" : ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"][new Date(d.dia).getDay()] }))} />
+      {/* Fila 2: Desglose de ingresos + Alertas */}
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr 1fr 1fr", gap: 10 }}>
+        <KpiCard icono="💵" label="Efectivo"       valor={fmt(s.efectivo)}      sub="semana" color="#34D399" />
+        <KpiCard icono="💳" label="Tarjeta"        valor={fmt(s.tarjeta)}       sub="semana" color="#818CF8" />
+        <KpiCard icono="🏦" label="Transferencia"  valor={fmt(s.transferencia)} sub="semana" color="#FB923C" />
+        <KpiCard icono="⚠"  label="Stock bajo"     valor={alertas.stock_bajo||0} sub="productos" color="#EF4444" alerta={(alertas.stock_bajo||0)>0} onClick={onVerStockBajo} />
+        <KpiCard icono="💳" label="CxC pendiente"  valor={fmt(alertas.total_cxc)} sub={`${alertas.num_cxc||0} clientes`} color="#F59E0B" />
+      </div>
+
+      {/* ── Gráfica + Órdenes ─────────────────────────────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr", gap: 16 }}>
+        <Card titulo="Ventas diarias — últimos 7 días">
+          <BarChart data={diasSemana.map((d,i) => ({ ...d, dia: i===diasSemana.length-1 ? "Hoy" : ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"][new Date(d.dia).getDay()] }))} />
         </Card>
-        <Card titulo="Top productos del mes">
-          {top.length === 0
-            ? <p style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>Sin ventas registradas aún</p>
-            : top.map((p, i) => (
-              <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--color-border-tertiary)", fontSize: 13 }}>
-                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 160 }}>{p.nombre}</span>
-                <span style={{ fontWeight: 600, color: "#1D4ED8", whiteSpace: "nowrap" }}>{fmt(p.ingresos)}</span>
-              </div>
-            ))
+        <Card titulo="Órdenes activas">
+          {(alertas.en_espera||0)+(alertas.en_proceso||0)+(alertas.listo||0) === 0
+            ? <p style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>Sin órdenes activas</p>
+            : [["🕐 En espera", alertas.en_espera, "#F59E0B"],
+               ["⚙ En proceso", alertas.en_proceso, "#60A5FA"],
+               ["✅ Listo p/ entregar", alertas.listo, "#34D399"]
+              ].map(([label, val, color]) => val > 0 && (
+                <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--color-border-tertiary)", fontSize: 13 }}>
+                  <span>{label}</span>
+                  <span style={{ fontWeight: 700, color }}>{val}</span>
+                </div>
+              ))
           }
         </Card>
       </div>
 
+      {/* ── Productos vendidos esta semana ────────────────────────────────── */}
+      <Card titulo={`Productos vendidos esta semana${productos.length ? ` (${productos.length})` : ""}`}>
+        {productos.length === 0
+          ? <p style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>Sin ventas en los últimos 7 días.</p>
+          : (
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <thead><tr style={{ background: "var(--color-background-tertiary)" }}>
+                  {["Producto","Medida","Cant.","Ingresos","Costo","Margen"].map((h,i) =>
+                    <th key={h} style={{ padding: "8px 10px", textAlign: i>=2?"right":"left", fontSize: 10, fontWeight: 700, color: "var(--color-text-secondary)", textTransform: "uppercase" }}>{h}</th>)}
+                </tr></thead>
+                <tbody>
+                  {productos.map((p, i) => {
+                    const ingr   = parseFloat(p.ingresos) || 0;
+                    const costo  = parseFloat(p.costo)    || 0;
+                    const margen = ingr > 0 ? ((ingr - costo) / ingr * 100).toFixed(0) : 0;
+                    const mColor = parseInt(margen) >= 20 ? "#34D399" : parseInt(margen) >= 0 ? "#FBBF24" : "#F87171";
+                    return (
+                      <tr key={i} style={{ borderTop: "1px solid var(--color-border-tertiary)" }}>
+                        <td style={{ padding: "8px 10px", fontWeight: 600, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nombre}</td>
+                        <td style={{ padding: "8px 10px", color: "var(--color-text-secondary)" }}>{p.medida || "—"}</td>
+                        <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 700 }}>{parseFloat(p.cantidad_vendida)}</td>
+                        <td style={{ padding: "8px 10px", textAlign: "right", color: "#60A5FA", fontWeight: 600 }}>{fmt(ingr)}</td>
+                        <td style={{ padding: "8px 10px", textAlign: "right", color: "var(--color-text-secondary)" }}>{costo > 0 ? fmt(costo) : "—"}</td>
+                        <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 700, color: mColor }}>{costo > 0 ? `${margen}%` : "—"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr style={{ borderTop: "2px solid var(--color-border-tertiary)", background: "var(--color-background-tertiary)" }}>
+                    <td colSpan={2} style={{ padding: "8px 10px", fontWeight: 700, fontSize: 11 }}>TOTALES</td>
+                    <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 700 }}>{productos.reduce((s,p) => s + parseFloat(p.cantidad_vendida||0), 0)}</td>
+                    <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 700, color: "#60A5FA" }}>{fmt(s.total_ventas)}</td>
+                    <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 700 }}>{fmt(s.costo_total)}</td>
+                    <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 700, color: margenColor }}>{s.margen_bruto||0}%</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )
+        }
+      </Card>
+
       {/* ── Últimas ventas ────────────────────────────────────────────────── */}
-      <Card titulo="Últimas ventas">
+      <Card titulo="Últimas ventas capturadas">
         {ultimas.length === 0
-          ? <p style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>Sin ventas registradas hoy</p>
+          ? <p style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>Sin ventas recientes</p>
           : (
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead><tr style={{ background: "var(--color-background-tertiary)" }}>
-                  {["Folio", "Hora", "Cliente", "Método", "Total"].map(h =>
-                    <th key={h} style={{ padding: "8px 12px", textAlign: h === "Total" ? "right" : "left", fontSize: 11, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase" }}>{h}</th>)}
+                  {["Folio","Hora","Cliente","Método","Total"].map(h =>
+                    <th key={h} style={{ padding: "8px 10px", textAlign: h==="Total"?"right":"left", fontSize: 10, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase" }}>{h}</th>)}
                 </tr></thead>
                 <tbody>
                   {ultimas.map(v => (
                     <tr key={v.folio} style={{ borderTop: "1px solid var(--color-border-tertiary)" }}>
-                      <td style={{ padding: "8px 12px", fontWeight: 600 }}>{v.folio}</td>
-                      <td style={{ padding: "8px 12px", color: "var(--color-text-secondary)" }}>{new Date(v.fecha_local).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}</td>
-                      <td style={{ padding: "8px 12px" }}>{v.cliente_nombre}</td>
-                      <td style={{ padding: "8px 12px", textTransform: "capitalize" }}>{v.metodo_pago}</td>
-                      <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 700, color: "#60A5FA" }}>{fmt(v.total)}</td>
+                      <td style={{ padding: "8px 10px", fontWeight: 600 }}>{v.folio}</td>
+                      <td style={{ padding: "8px 10px", color: "var(--color-text-secondary)" }}>{new Date(v.fecha_local).toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"})}</td>
+                      <td style={{ padding: "8px 10px" }}>{v.cliente_nombre}</td>
+                      <td style={{ padding: "8px 10px", textTransform: "capitalize" }}>{v.metodo_pago}</td>
+                      <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 700, color: "#60A5FA" }}>{fmt(v.total)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -488,7 +550,7 @@ function Dashboard({ setSeccion, onNuevaCompra, onNuevoGasto, onVerStockBajo }) 
   );
 }
 
-// ─── Módulo Inventario ────────────────────────────────────────────────────────
+
 function Inventario({ onNuevoProducto, filtroStockBajoInicial = false }) {
   const [productos, setProductos] = useState([]);
   const [buscar, setBuscar] = useState("");

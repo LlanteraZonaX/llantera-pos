@@ -1,82 +1,141 @@
 import { query } from '../config/db.js';
 
+const SEMANA = `(NOW() AT TIME ZONE 'America/Mexico_City')::date - INTERVAL '6 days'`;
+
 export const dashboard = async (req, res) => {
   try {
     const negocio_id = req.user.negocio_id;
-    const [ventas_hoy, gastos_mes, inventario, ordenes, cxc] = await Promise.all([
+
+    const [ventasSemana, costoSemana, gastosSemana, alertas, ordenes,
+           ventasPorDia, productosSemana, ultimasVentas] = await Promise.all([
+
+      // 1. Ventas últimos 7 días
       query(`SELECT
-               COALESCE(SUM(total) FILTER (WHERE estado='pagada'),0) as ingresos_hoy,
-               COUNT(*) FILTER (WHERE estado='pagada') as num_ventas,
-               COALESCE(SUM(total) FILTER (WHERE estado='pagada' AND metodo_pago='efectivo'),0) as efectivo,
-               COALESCE(SUM(total) FILTER (WHERE estado='pagada' AND metodo_pago='tarjeta'),0) as tarjeta
-             FROM ventas WHERE (fecha AT TIME ZONE 'America/Mexico_City')::date = (NOW() AT TIME ZONE 'America/Mexico_City')::date AND negocio_id = $1`, [negocio_id]),
+               COALESCE(SUM(total) FILTER (WHERE estado='pagada'), 0) AS total_ventas,
+               COUNT(*) FILTER (WHERE estado='pagada') AS num_ventas,
+               COALESCE(SUM(total) FILTER (WHERE estado='pagada' AND metodo_pago='efectivo'), 0) AS efectivo,
+               COALESCE(SUM(total) FILTER (WHERE estado='pagada' AND metodo_pago='tarjeta'), 0) AS tarjeta,
+               COALESCE(SUM(total) FILTER (WHERE estado='pagada' AND metodo_pago='transferencia'), 0) AS transferencia,
+               COALESCE(SUM(total) FILTER (WHERE estado='pagada') /
+                 NULLIF(COUNT(*) FILTER (WHERE estado='pagada'), 0), 0) AS ticket_promedio
+             FROM ventas
+             WHERE negocio_id = $1
+               AND (fecha AT TIME ZONE 'America/Mexico_City')::date >= ${SEMANA}`,
+        [negocio_id]),
 
-      query(`SELECT COALESCE(SUM(monto),0) as gastos_mes
-             FROM gastos
-             WHERE DATE_TRUNC('month', fecha) = DATE_TRUNC('month', (NOW() AT TIME ZONE 'America/Mexico_City')::date) AND negocio_id = $1`, [negocio_id]),
+      // 2. Costo de lo vendido (precio_compra × unidades vendidas)
+      query(`SELECT COALESCE(SUM(vd.cantidad * p.precio_compra), 0) AS costo_total
+             FROM ventas_detalle vd
+             JOIN ventas v    ON vd.venta_id   = v.id
+             JOIN productos p ON vd.producto_id = p.id
+             WHERE v.negocio_id = $1 AND v.estado = 'pagada'
+               AND (v.fecha AT TIME ZONE 'America/Mexico_City')::date >= ${SEMANA}`,
+        [negocio_id]),
 
-      query(`SELECT COUNT(*) as stock_bajo
-             FROM productos WHERE stock_actual <= stock_minimo AND activo = true AND es_servicio = false AND negocio_id = $1`, [negocio_id]),
-
+      // 3. Gastos de la semana
       query(`SELECT
-               COUNT(*) FILTER (WHERE estado = 'en_espera') as en_espera,
-               COUNT(*) FILTER (WHERE estado = 'en_proceso') as en_proceso,
-               COUNT(*) FILTER (WHERE estado = 'listo') as listo
+               COALESCE(SUM(g.monto), 0) AS total_gastos,
+               COUNT(*) AS num_gastos,
+               json_agg(json_build_object(
+                 'categoria', COALESCE(cg.nombre, 'Sin categoría'),
+                 'monto', g.monto,
+                 'descripcion', g.descripcion
+               ) ORDER BY g.fecha DESC) AS detalle
+             FROM gastos g
+             LEFT JOIN categorias_gasto cg ON g.categoria_id = cg.id
+             WHERE g.negocio_id = $1
+               AND (g.fecha AT TIME ZONE 'America/Mexico_City')::date >= ${SEMANA}`,
+        [negocio_id]),
+
+      // 4. Alertas: stock bajo + CxC
+      query(`SELECT
+               (SELECT COUNT(*) FROM productos WHERE negocio_id = $1
+                AND activo = true AND es_servicio = false
+                AND stock_actual <= stock_minimo) AS stock_bajo,
+               (SELECT COALESCE(SUM(saldo), 0) FROM cuentas_cobrar
+                WHERE negocio_id = $1 AND estado IN ('pendiente','parcial')) AS total_cxc,
+               (SELECT COUNT(*) FROM cuentas_cobrar
+                WHERE negocio_id = $1 AND estado IN ('pendiente','parcial')) AS num_cxc`,
+        [negocio_id]),
+
+      // 5. Órdenes activas
+      query(`SELECT
+               COUNT(*) FILTER (WHERE estado = 'en_espera')  AS en_espera,
+               COUNT(*) FILTER (WHERE estado = 'en_proceso') AS en_proceso,
+               COUNT(*) FILTER (WHERE estado = 'listo')      AS listo
              FROM ordenes_servicio
-             WHERE fecha_ingreso >= CURRENT_DATE - INTERVAL '7 days' AND negocio_id = $1`, [negocio_id]),
+             WHERE negocio_id = $1
+               AND fecha_ingreso >= CURRENT_DATE - INTERVAL '7 days'`,
+        [negocio_id]),
 
-      query(`SELECT COALESCE(SUM(saldo),0) as total_cxc,
-                    COUNT(*) as num_pendientes
-             FROM cuentas_cobrar WHERE estado IN ('pendiente','parcial') AND negocio_id = $1`, [negocio_id])
+      // 6. Ventas por día (gráfica)
+      query(`SELECT
+               (fecha AT TIME ZONE 'America/Mexico_City')::date AS dia,
+               COALESCE(SUM(total) FILTER (WHERE estado='pagada'), 0) AS total,
+               COUNT(*) FILTER (WHERE estado='pagada') AS cantidad
+             FROM ventas
+             WHERE negocio_id = $1
+               AND (fecha AT TIME ZONE 'America/Mexico_City')::date >= ${SEMANA}
+             GROUP BY dia ORDER BY dia`,
+        [negocio_id]),
+
+      // 7. Productos vendidos esta semana con costo y margen
+      query(`SELECT
+               p.nombre, p.medida, p.marca,
+               COALESCE(SUM(vd.cantidad), 0) AS cantidad_vendida,
+               COALESCE(SUM(vd.subtotal), 0) AS ingresos,
+               COALESCE(SUM(vd.cantidad * p.precio_compra), 0) AS costo
+             FROM ventas_detalle vd
+             JOIN ventas v    ON vd.venta_id   = v.id
+             JOIN productos p ON vd.producto_id = p.id
+             WHERE v.negocio_id = $1 AND v.estado = 'pagada'
+               AND (v.fecha AT TIME ZONE 'America/Mexico_City')::date >= ${SEMANA}
+             GROUP BY p.id, p.nombre, p.medida, p.marca
+             ORDER BY cantidad_vendida DESC
+             LIMIT 25`,
+        [negocio_id]),
+
+      // 8. Últimas 5 ventas
+      query(`SELECT v.folio, v.total, v.metodo_pago,
+                    (v.fecha AT TIME ZONE 'America/Mexico_City') AS fecha_local,
+                    COALESCE(c.nombre, 'Cliente general') AS cliente_nombre
+             FROM ventas v
+             LEFT JOIN clientes c ON v.cliente_id = c.id
+             WHERE v.negocio_id = $1 AND v.estado = 'pagada'
+             ORDER BY v.fecha DESC LIMIT 5`,
+        [negocio_id]),
     ]);
 
-    const { rows: ventas_semana } = await query(
-      `SELECT (fecha AT TIME ZONE 'America/Mexico_City')::date as dia,
-              COALESCE(SUM(total) FILTER (WHERE estado='pagada'),0) as total,
-              COUNT(*) FILTER (WHERE estado='pagada') as cantidad
-       FROM ventas
-       WHERE (fecha AT TIME ZONE 'America/Mexico_City')::date >= (NOW() AT TIME ZONE 'America/Mexico_City')::date - INTERVAL '6 days' AND negocio_id = $1
-       GROUP BY dia ORDER BY dia`,
-      [negocio_id]
-    );
-
-    const { rows: ultimas_ventas } = await query(
-      `SELECT v.folio, v.total, v.metodo_pago,
-              (v.fecha AT TIME ZONE 'America/Mexico_City') as fecha_local,
-              COALESCE(c.nombre, 'Cliente general') as cliente_nombre
-       FROM ventas v
-       LEFT JOIN clientes c ON v.cliente_id = c.id
-       WHERE v.negocio_id = $1 AND v.estado = 'pagada'
-       ORDER BY v.fecha DESC LIMIT 5`,
-      [negocio_id]
-    );
-
-    const { rows: top_productos } = await query(
-      `SELECT p.nombre, p.medida, SUM(vd.cantidad) as unidades, SUM(vd.subtotal) as ingresos
-       FROM ventas_detalle vd
-       JOIN ventas v ON vd.venta_id = v.id
-       JOIN productos p ON vd.producto_id = p.id
-       WHERE (v.fecha AT TIME ZONE 'America/Mexico_City') >= DATE_TRUNC('month', (NOW() AT TIME ZONE 'America/Mexico_City')) AND v.estado = 'pagada' AND v.negocio_id = $1
-       GROUP BY p.id, p.nombre, p.medida
-       ORDER BY ingresos DESC LIMIT 5`,
-      [negocio_id]
-    );
+    const total_ventas   = parseFloat(ventasSemana.rows[0].total_ventas)  || 0;
+    const costo_total    = parseFloat(costoSemana.rows[0].costo_total)    || 0;
+    const total_gastos   = parseFloat(gastosSemana.rows[0].total_gastos)  || 0;
+    const utilidad_bruta = total_ventas - costo_total;
+    const utilidad_neta  = utilidad_bruta - total_gastos;
+    const margen_bruto   = total_ventas > 0 ? (utilidad_bruta / total_ventas) * 100 : 0;
 
     res.json({
-      kpis: {
-        ...ventas_hoy.rows[0],
-        gastos_mes: gastos_mes.rows[0].gastos_mes,
-        stock_bajo: parseInt(inventario.rows[0].stock_bajo),
-        ...ordenes.rows[0],
-        ...cxc.rows[0],
-        utilidad_hoy: ventas_hoy.rows[0].ingresos_hoy - 0
+      semana: {
+        ...ventasSemana.rows[0],
+        costo_total,
+        total_gastos,
+        utilidad_bruta,
+        utilidad_neta,
+        margen_bruto:  parseFloat(margen_bruto.toFixed(1)),
+        num_gastos:    parseInt(gastosSemana.rows[0].num_gastos) || 0,
+        gastos_detalle: gastosSemana.rows[0].detalle || [],
       },
-      ventas_semana,
-      top_productos,
-      ultimas_ventas
+      alertas: {
+        stock_bajo: parseInt(alertas.rows[0].stock_bajo) || 0,
+        total_cxc:  parseFloat(alertas.rows[0].total_cxc) || 0,
+        num_cxc:    parseInt(alertas.rows[0].num_cxc) || 0,
+        ...ordenes.rows[0],
+      },
+      ventas_por_dia:   ventasPorDia.rows,
+      productos_semana: productosSemana.rows,
+      ultimas_ventas:   ultimasVentas.rows,
     });
   } catch (err) {
-    console.error(err);
+    console.error('[dashboard]', err);
     res.status(500).json({ error: 'Error al obtener dashboard' });
   }
 };
