@@ -101,7 +101,7 @@ try {
       await client.query(`DELETE FROM productos WHERE negocio_id = $1`, [nid]);
       await client.query(`DELETE FROM marcas WHERE negocio_id = $1`, [nid]);
       await client.query(`DELETE FROM usuarios WHERE negocio_id = $1`, [nid]);
-      await client.query(`DELETE FROM roles WHERE negocio_id = $1`, [nid]);
+      // Roles son globales — NO se eliminan
       await client.query(`DELETE FROM negocios WHERE id = $1`, [nid]);
       console.log('✅  Datos del demo eliminados\n');
     }
@@ -123,26 +123,28 @@ try {
   }
   const negocio_id = negocio.id;
 
-  // ── 2. Rol admin ─────────────────────────────────────────────────────────
-  let { rows: [rol] } = await client.query(`SELECT id FROM roles WHERE negocio_id = $1 AND nombre = 'admin' LIMIT 1`, [negocio_id]);
+  // ── 2. Roles (tabla global — sin negocio_id) ─────────────────────────────
+  let { rows: [rol] } = await client.query(`SELECT id FROM roles WHERE nombre = 'admin' LIMIT 1`);
   if (!rol) {
     const rolId = uuid();
     await client.query(
-      `INSERT INTO roles (id, negocio_id, nombre, permisos) VALUES ($1, $2, 'admin', '{"todo":true}')`,
-      [rolId, negocio_id]
+      `INSERT INTO roles (id, nombre, permisos) VALUES ($1, 'admin', '{"todo":true}')`,
+      [rolId]
     );
     rol = { id: rolId };
     console.log('✅  Rol admin creado');
+  } else {
+    console.log('ℹ️   Rol admin ya existe');
   }
 
   // Rol vendedor
-  let { rows: [rolVend] } = await client.query(`SELECT id FROM roles WHERE negocio_id = $1 AND nombre = 'vendedor' LIMIT 1`, [negocio_id]);
+  let { rows: [rolVend] } = await client.query(`SELECT id FROM roles WHERE nombre = 'vendedor' LIMIT 1`);
   if (!rolVend) {
     const rolVId = uuid();
     await client.query(
-      `INSERT INTO roles (id, negocio_id, nombre, permisos)
-       VALUES ($1, $2, 'vendedor', '{"ventas":true,"productos_ver":true,"cotizaciones":true,"clientes":true}')`,
-      [rolVId, negocio_id]
+      `INSERT INTO roles (id, nombre, permisos)
+       VALUES ($1, 'vendedor', '{"ventas":true,"productos_ver":true,"cotizaciones":true,"clientes":true}')`,
+      [rolVId]
     );
     rolVend = { id: rolVId };
   }
