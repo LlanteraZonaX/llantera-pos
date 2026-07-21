@@ -3,7 +3,14 @@ import api from "./api";
 
 // ─── Utilidades ───────────────────────────────────────────────────────────────
 const fmt = (n) => `$${Number(n || 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const fmtFecha = (f) => f ? new Date(f).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" }) : "—";
+// fmtFecha: toma los primeros 10 chars (YYYY-MM-DD) y los parsea como fecha LOCAL
+// para evitar que columnas tipo DATE (medianoche UTC) se desplacen al día anterior en MX.
+const fmtFecha = (f) => {
+  if (!f) return "—";
+  const s = typeof f === "string" ? f : new Date(f).toISOString();
+  const [y, m, d] = s.substring(0, 10).split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" });
+};
 
 const ESTADO_COLORES = {
   en_espera:  { bg: "#FEF3C7", color: "#92400E", label: "En espera" },
