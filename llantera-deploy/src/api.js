@@ -40,6 +40,8 @@ export const api = {
     fetch(`${BASE}/productos?${params}`, { headers: headers() }).then(handle),
   crearProducto: (data) =>
     fetch(`${BASE}/productos`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle),
+  importarProductos: (productos) =>
+    fetch(`${BASE}/productos/importar`, { method: 'POST', headers: headers(), body: JSON.stringify({ productos }) }).then(handle),
   actualizarProducto: (id, data) =>
     fetch(`${BASE}/productos/${id}`, { method: 'PUT', headers: headers(), body: JSON.stringify(data) }).then(handle),
 

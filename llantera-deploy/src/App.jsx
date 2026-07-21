@@ -558,7 +558,215 @@ function Dashboard({ setSeccion, onNuevaCompra, onNuevoGasto, onVerStockBajo }) 
 }
 
 
-// ─── Modal historial de ventas de un producto ─────────────────────────────────
+// ─── Importación masiva de productos ─────────────────────────────────────────
+// Parseo CSV manual — sin librerías externas
+const parsearFilaCSV = (linea) => {
+  const vals = []; let actual = ''; let enComillas = false;
+  for (let i = 0; i < linea.length; i++) {
+    const c = linea[i];
+    if (c === '"') { enComillas = !enComillas; }
+    else if (c === ',' && !enComillas) { vals.push(actual.trim()); actual = ''; }
+    else { actual += c; }
+  }
+  vals.push(actual.trim());
+  return vals;
+};
+
+const parsearCSV = (texto) => {
+  const lineas = texto.trim().split('\n').map(l => l.replace(/\r/g, '').replace(/^\uFEFF/, ''));
+  if (lineas.length < 2) return null;
+  const headers = parsearFilaCSV(lineas[0]).map(h => h.replace(/"/g, '').trim().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')); // quitar acentos en headers
+  return lineas.slice(1).filter(l => l.trim()).map(l => {
+    const vals = parsearFilaCSV(l);
+    const obj = {};
+    headers.forEach((h, i) => { obj[h] = (vals[i] || '').replace(/^"|"$/g, ''); });
+    return obj;
+  });
+};
+
+// Descargar plantilla CSV para Excel
+const descargarPlantillaProductos = () => {
+  const BOM  = '\uFEFF';
+  const cols = ['nombre','medida','marca','sku','precio_venta','precio_compra','stock_actual','stock_minimo','descripcion','categoria'];
+  const ej1  = ['LLANTA SEMINUEVA 185/60R14','185/60R14','HANKOOK','LS-001','500','300','10','2','Llanta en buen estado','Llanta'];
+  const ej2  = ['PARCHE GRANDE','#4','REMA','PAR-G-001','15','8','100','20','','Consumible'];
+  const csv  = BOM + [cols, ej1, ej2].map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+  const a    = document.createElement('a');
+  a.href     = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'formato_importacion_productos.csv';
+  a.click();
+};
+
+function ModalImportarProductos({ onClose, onImportado }) {
+  const [paso, setPaso]         = useState('subir'); // subir | preview | resultado
+  const [filas, setFilas]       = useState([]);
+  const [erroresPrev, setErroresPrev] = useState([]);
+  const [importando, setImportando]   = useState(false);
+  const [resultado, setResultado]     = useState(null);
+  const inputRef = useRef(null);
+
+  const CAMPOS_REQUERIDOS = ['nombre', 'precio_venta'];
+  const CAMPOS_VALIDOS    = ['nombre','medida','marca','sku','precio_venta','precio_compra','stock_actual','stock_minimo','descripcion','categoria'];
+
+  const leerArchivo = (e) => {
+    const archivo = e.target.files[0];
+    if (!archivo) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const texto  = ev.target.result;
+      const parsed = parsearCSV(texto);
+      if (!parsed || parsed.length === 0) {
+        alert('El archivo está vacío o no tiene el formato correcto.');
+        return;
+      }
+      // Validación previa fila a fila
+      const errs = [];
+      parsed.forEach((p, i) => {
+        if (!p.nombre?.trim())                   errs.push(`Fila ${i+2}: falta "nombre"`);
+        else if (!p.precio_venta?.trim())        errs.push(`Fila ${i+2} (${p.nombre}): falta "precio_venta"`);
+        else if (isNaN(parseFloat(p.precio_venta))) errs.push(`Fila ${i+2} (${p.nombre}): "precio_venta" no es un número`);
+      });
+      setFilas(parsed);
+      setErroresPrev(errs);
+      setPaso('preview');
+    };
+    reader.readAsText(archivo, 'UTF-8');
+  };
+
+  const confirmarImport = async () => {
+    setImportando(true);
+    try {
+      const res = await api.importarProductos(filas);
+      setResultado(res);
+      setPaso('resultado');
+    } catch (e) {
+      alert('Error al importar: ' + e.message);
+    } finally {
+      setImportando(false);
+    }
+  };
+
+  const filasValidas   = filas.filter(p => p.nombre?.trim() && !isNaN(parseFloat(p.precio_venta)));
+  const filasInvalidas = filas.length - filasValidas.length;
+
+  return (
+    <div style={overlayStyle}>
+      <div style={{ ...modalBase, maxWidth: 680 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>📤 Importar productos desde Excel/CSV</h2>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)" }}>✕</button>
+        </div>
+
+        {paso === 'subir' && (
+          <div>
+            <div style={{ background: "var(--color-background-secondary)", borderRadius: 10, padding: 20, marginBottom: 16, border: "1px solid var(--color-border-tertiary)" }}>
+              <p style={{ margin: "0 0 12px", fontSize: 13, color: "var(--color-text-secondary)" }}>
+                Sube un archivo CSV o Excel (guardado como CSV). Descarga el formato de ejemplo para ver los campos requeridos.
+              </p>
+              <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 16 }}>
+                <strong>Columnas requeridas:</strong> nombre, precio_venta<br/>
+                <strong>Columnas opcionales:</strong> medida, marca, sku, precio_compra, stock_actual, stock_minimo, descripcion, categoria
+              </div>
+              <button onClick={descargarPlantillaProductos} style={{ padding: "8px 16px", background: "#059669", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600, marginBottom: 16 }}>
+                📥 Descargar formato de ejemplo
+              </button>
+            </div>
+            <input ref={inputRef} type="file" accept=".csv,.txt" style={{ display: "none" }} onChange={leerArchivo} />
+            <button onClick={() => inputRef.current?.click()} style={{ width: "100%", padding: "32px", border: "2px dashed var(--color-border-secondary)", borderRadius: 12, background: "none", cursor: "pointer", fontSize: 14, color: "var(--color-text-secondary)", display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 32 }}>📂</span>
+              <span style={{ fontWeight: 600 }}>Seleccionar archivo CSV</span>
+              <span style={{ fontSize: 12 }}>Guarda tu Excel como CSV antes de subir</span>
+            </button>
+          </div>
+        )}
+
+        {paso === 'preview' && (
+          <div>
+            <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+              <div style={{ background: "rgba(5,150,105,0.1)", border: "1px solid #059669", borderRadius: 8, padding: "10px 16px", flex: 1 }}>
+                <div style={{ fontSize: 11, color: "#059669" }}>LISTOS PARA IMPORTAR</div>
+                <div style={{ fontWeight: 700, fontSize: 22, color: "#059669" }}>{filasValidas.length}</div>
+              </div>
+              {filasInvalidas > 0 && (
+                <div style={{ background: "rgba(185,28,28,0.08)", border: "1px solid #B91C1C", borderRadius: 8, padding: "10px 16px", flex: 1 }}>
+                  <div style={{ fontSize: 11, color: "#B91C1C" }}>CON ERRORES (se omitirán)</div>
+                  <div style={{ fontWeight: 700, fontSize: 22, color: "#B91C1C" }}>{filasInvalidas}</div>
+                </div>
+              )}
+            </div>
+
+            {erroresPrev.length > 0 && (
+              <div style={{ background: "rgba(185,28,28,0.06)", borderRadius: 8, padding: "10px 14px", marginBottom: 12, maxHeight: 100, overflowY: "auto" }}>
+                {erroresPrev.map((e, i) => <div key={i} style={{ fontSize: 12, color: "#B91C1C", marginBottom: 2 }}>⚠ {e}</div>)}
+              </div>
+            )}
+
+            <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 8, fontWeight: 600 }}>Vista previa (primeras 5 filas válidas):</div>
+            <div style={{ overflowX: "auto", maxHeight: 220, overflowY: "auto", marginBottom: 16 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <thead><tr style={{ background: "var(--color-background-tertiary)" }}>
+                  {['Nombre','Medida','Marca','P.Venta','P.Compra','Stock','Categoría'].map(h =>
+                    <th key={h} style={{ padding: "6px 10px", textAlign: "left", fontSize: 10, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>)}
+                </tr></thead>
+                <tbody>
+                  {filasValidas.slice(0, 5).map((p, i) => (
+                    <tr key={i} style={{ borderTop: "1px solid var(--color-border-tertiary)" }}>
+                      <td style={{ padding: "6px 10px", fontWeight: 600 }}>{p.nombre}</td>
+                      <td style={{ padding: "6px 10px", color: "var(--color-text-secondary)" }}>{p.medida || '—'}</td>
+                      <td style={{ padding: "6px 10px", color: "var(--color-text-secondary)" }}>{p.marca || '—'}</td>
+                      <td style={{ padding: "6px 10px" }}>{fmt(p.precio_venta)}</td>
+                      <td style={{ padding: "6px 10px", color: "var(--color-text-secondary)" }}>{p.precio_compra ? fmt(p.precio_compra) : '—'}</td>
+                      <td style={{ padding: "6px 10px" }}>{p.stock_actual || '0'}</td>
+                      <td style={{ padding: "6px 10px", color: "var(--color-text-secondary)" }}>{p.categoria || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {filasValidas.length > 5 && <p style={{ fontSize: 12, color: "var(--color-text-secondary)", margin: "0 0 16px" }}>...y {filasValidas.length - 5} filas más</p>}
+
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button onClick={() => { setPaso('subir'); setFilas([]); }} style={{ padding: "9px 18px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13, color: "#fff" }}>← Cambiar archivo</button>
+              <button onClick={confirmarImport} disabled={importando || filasValidas.length === 0} style={{ padding: "9px 24px", background: filasValidas.length > 0 ? "#1D4ED8" : "var(--color-background-tertiary)", color: "#fff", border: "none", borderRadius: 8, cursor: filasValidas.length > 0 ? "pointer" : "not-allowed", fontSize: 13, fontWeight: 600 }}>
+                {importando ? "Importando..." : `✓ Importar ${filasValidas.length} productos`}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {paso === 'resultado' && resultado && (
+          <div>
+            <div style={{ textAlign: "center", padding: "20px 0 24px" }}>
+              <div style={{ fontSize: 48, marginBottom: 12 }}>{resultado.errores?.length === 0 ? "✅" : "⚠️"}</div>
+              <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 6 }}>{resultado.mensaje}</div>
+            </div>
+            <div style={{ display: "flex", gap: 12, marginBottom: resultado.errores?.length > 0 ? 16 : 0 }}>
+              <div style={{ background: "rgba(5,150,105,0.1)", border: "1px solid #059669", borderRadius: 8, padding: "10px 16px", flex: 1, textAlign: "center" }}>
+                <div style={{ fontSize: 11, color: "#059669" }}>CREADOS</div>
+                <div style={{ fontWeight: 700, fontSize: 24, color: "#059669" }}>{resultado.creados}</div>
+              </div>
+              <div style={{ background: "rgba(100,116,139,0.1)", border: "1px solid var(--color-border-secondary)", borderRadius: 8, padding: "10px 16px", flex: 1, textAlign: "center" }}>
+                <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>OMITIDOS</div>
+                <div style={{ fontWeight: 700, fontSize: 24 }}>{resultado.omitidos}</div>
+              </div>
+            </div>
+            {resultado.errores?.length > 0 && (
+              <div style={{ background: "rgba(185,28,28,0.06)", borderRadius: 8, padding: "10px 14px", maxHeight: 130, overflowY: "auto", marginBottom: 16 }}>
+                {resultado.errores.map((e, i) => <div key={i} style={{ fontSize: 12, color: "#B91C1C", marginBottom: 2 }}>⚠ Fila {e.fila}: {e.mensaje}</div>)}
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button onClick={() => { setFilas([]); setPaso('subir'); setResultado(null); }} style={{ padding: "9px 18px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13, color: "#fff" }}>Importar otro archivo</button>
+              <button onClick={() => { onImportado(); onClose(); }} style={{ padding: "9px 24px", background: "#059669", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>✓ Cerrar y actualizar</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ModalVentasProducto({ producto, onClose }) {
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
@@ -653,8 +861,9 @@ function Inventario({ onNuevoProducto, filtroStockBajoInicial = false }) {
   const [loading, setLoading] = useState(true);
   const [fotoModal, setFotoModal] = useState(null); // producto seleccionado
   const [soloStockBajo, setSoloStockBajo] = useState(filtroStockBajoInicial);
-  const [editando, setEditando] = useState(null); // producto que se está editando
+  const [editando, setEditando] = useState(null);
   const [ventasProducto, setVentasProducto] = useState(null);
+  const [mostrarImport, setMostrarImport] = useState(false);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -676,6 +885,8 @@ function Inventario({ onNuevoProducto, filtroStockBajoInicial = false }) {
         <button onClick={() => setSoloStockBajo(v => !v)} style={{ padding: "8px 14px", borderRadius: 20, border: `1px solid ${soloStockBajo ? "#EF4444" : "var(--color-border-secondary)"}`, background: soloStockBajo ? "rgba(239,68,68,0.12)" : "none", color: soloStockBajo ? "#EF4444" : "var(--color-text-secondary)", cursor: "pointer", fontSize: 12, fontWeight: soloStockBajo ? 700 : 400, whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6 }}>
           ⚠ Stock bajo {soloStockBajo ? "✓" : ""}
         </button>
+        <button onClick={descargarPlantillaProductos} style={{ padding: "8px 14px", background: "none", border: "1px solid var(--color-border-secondary)", borderRadius: 8, cursor: "pointer", fontSize: 12, color: "#fff", whiteSpace: "nowrap" }}>📥 Formato</button>
+        <button onClick={() => setMostrarImport(true)} style={{ padding: "8px 14px", background: "#7C3AED", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>📤 Importar</button>
         <button onClick={onNuevoProducto} style={{ padding: "8px 18px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>+ Producto</button>
       </div>
       {loading ? <div style={{ textAlign: "center", padding: 40, color: "var(--color-text-secondary)" }}>Cargando...</div> : (
@@ -721,6 +932,7 @@ function Inventario({ onNuevoProducto, filtroStockBajoInicial = false }) {
       {fotoModal && <ModalFotosProducto producto={fotoModal} onClose={() => setFotoModal(null)} onSaved={() => { setFotoModal(null); cargar(); }} />}
       {editando && <ModalProducto producto={editando} onClose={() => setEditando(null)} onSaved={() => { setEditando(null); cargar(); }} />}
       {ventasProducto && <ModalVentasProducto producto={ventasProducto} onClose={() => setVentasProducto(null)} />}
+      {mostrarImport && <ModalImportarProductos onClose={() => setMostrarImport(false)} onImportado={cargar} />}
     </div>
   );
 }
