@@ -298,3 +298,83 @@ export const utilidadBruta = async (req, res) => {
     res.status(500).json({ error: 'Error al obtener utilidad' });
   }
 };
+
+// ── Reporte de inventario actual (solo productos con stock > 0) ───────────────
+export const inventarioActual = async (req, res) => {
+  try {
+    const { rows } = await query(
+      `SELECT
+         p.id, p.sku, p.nombre, p.medida, p.marca,
+         p.stock_actual, p.stock_minimo, p.precio_venta, p.precio_compra,
+         cat.nombre AS categoria,
+         COALESCE(SUM(vd.cantidad), 0) AS total_vendido,
+         ROUND(p.stock_actual * p.precio_venta, 2) AS valor_inventario
+       FROM productos p
+       LEFT JOIN categorias       cat ON p.categoria_id   = cat.id
+       LEFT JOIN ventas_detalle   vd  ON vd.producto_id   = p.id
+         AND vd.venta_id IN (
+           SELECT id FROM ventas WHERE negocio_id = $1 AND estado = 'pagada'
+         )
+       WHERE p.negocio_id = $1
+         AND p.activo       = true
+         AND p.es_servicio  = false
+         AND p.stock_actual > 0
+       GROUP BY p.id, p.sku, p.nombre, p.medida, p.marca,
+                p.stock_actual, p.stock_minimo, p.precio_venta, p.precio_compra,
+                cat.nombre
+       ORDER BY cat.nombre NULLS LAST, p.nombre`,
+      [req.user.negocio_id]
+    );
+    res.json({ data: rows });
+  } catch (err) {
+    console.error('[inventarioActual]', err);
+    res.status(500).json({ error: 'Error al obtener inventario actual' });
+  }
+};
+
+// ── Historial de ventas de un producto específico ────────────────────────────
+export const ventasPorProducto = async (req, res) => {
+  try {
+    const negocio_id = req.user.negocio_id;
+    const { producto_id } = req.params;
+
+    // Totales generales
+    const { rows: [resumen] } = await query(
+      `SELECT
+         COALESCE(SUM(vd.cantidad), 0)   AS total_unidades,
+         COALESCE(SUM(vd.subtotal), 0)   AS total_ingresos,
+         COUNT(DISTINCT v.id)            AS num_ventas
+       FROM ventas_detalle vd
+       JOIN ventas v ON vd.venta_id = v.id
+       WHERE vd.producto_id = $1
+         AND v.negocio_id   = $2
+         AND v.estado       = 'pagada'`,
+      [producto_id, negocio_id]
+    );
+
+    // Detalle de cada venta
+    const { rows: ventas } = await query(
+      `SELECT
+         v.id AS venta_id, v.folio, v.metodo_pago,
+         (v.fecha AT TIME ZONE 'America/Mexico_City') AS fecha_local,
+         vd.cantidad, vd.precio_unitario, vd.subtotal,
+         COALESCE(c.nombre, 'Cliente general') AS cliente_nombre,
+         u.nombre AS cajero_nombre
+       FROM ventas_detalle vd
+       JOIN ventas    v  ON vd.venta_id  = v.id
+       LEFT JOIN clientes  c  ON v.cliente_id = c.id
+       LEFT JOIN usuarios  u  ON v.usuario_id = u.id
+       WHERE vd.producto_id = $1
+         AND v.negocio_id   = $2
+         AND v.estado       = 'pagada'
+       ORDER BY v.fecha DESC
+       LIMIT 100`,
+      [producto_id, negocio_id]
+    );
+
+    res.json({ resumen, ventas });
+  } catch (err) {
+    console.error('[ventasPorProducto]', err);
+    res.status(500).json({ error: 'Error al obtener historial de ventas del producto' });
+  }
+};

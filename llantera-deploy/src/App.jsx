@@ -551,6 +551,95 @@ function Dashboard({ setSeccion, onNuevaCompra, onNuevoGasto, onVerStockBajo }) 
 }
 
 
+// ─── Modal historial de ventas de un producto ─────────────────────────────────
+function ModalVentasProducto({ producto, onClose }) {
+  const [data, setData]       = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [ticketId, setTicketId] = useState(null);
+
+  useEffect(() => {
+    api.ventasPorProducto(producto.id)
+      .then(setData)
+      .catch(() => setData(null))
+      .finally(() => setLoading(false));
+  }, [producto.id]);
+
+  const resumen = data?.resumen || {};
+  const ventas  = data?.ventas  || [];
+
+  return (
+    <div style={overlayStyle}>
+      <div style={{ ...modalBase, maxWidth: 700 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>📊 Historial de ventas</h2>
+            <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--color-text-secondary)" }}>{producto.nombre}{producto.medida ? ` · ${producto.medida}` : ""}</p>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)" }}>✕</button>
+        </div>
+
+        {loading ? <div style={{ textAlign: "center", padding: 40, color: "var(--color-text-secondary)" }}>Cargando...</div> : (
+          <>
+            {/* Resumen */}
+            <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+              {[
+                ["Veces vendido", resumen.num_ventas || 0, "var(--color-text-primary)", v => v],
+                ["Unidades totales", resumen.total_unidades || 0, "#60A5FA", v => parseFloat(v).toFixed(0)],
+                ["Ingresos totales", resumen.total_ingresos || 0, "#34D399", fmt],
+              ].map(([label, val, color, f]) => (
+                <div key={label} style={{ background: "var(--color-background-secondary)", borderRadius: 10, padding: "10px 16px", border: "1px solid var(--color-border-tertiary)", flex: 1 }}>
+                  <div style={{ fontSize: 10, color: "var(--color-text-secondary)", textTransform: "uppercase", marginBottom: 3 }}>{label}</div>
+                  <div style={{ fontWeight: 700, fontSize: 18, color }}>{f(val)}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Tabla de ventas */}
+            {ventas.length === 0
+              ? <p style={{ textAlign: "center", color: "var(--color-text-secondary)", padding: 30 }}>Este producto no tiene ventas registradas.</p>
+              : (
+                <div style={{ overflowX: "auto", maxHeight: 380, overflowY: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                    <thead style={{ position: "sticky", top: 0, zIndex: 1 }}>
+                      <tr style={{ background: "var(--color-background-tertiary)" }}>
+                        {["Folio","Fecha","Hora","Cliente","Cant.","P.U.","Importe","Método",""].map((h,i) =>
+                          <th key={h} style={{ padding: "8px 10px", textAlign: i>=4&&i<=6?"right":"left", fontSize: 10, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ventas.map(v => (
+                        <tr key={v.venta_id} style={{ borderTop: "1px solid var(--color-border-tertiary)" }}>
+                          <td style={{ padding: "8px 10px", fontWeight: 600 }}>{v.folio}</td>
+                          <td style={{ padding: "8px 10px", color: "var(--color-text-secondary)", whiteSpace: "nowrap" }}>{new Date(v.fecha_local).toLocaleDateString("es-MX",{day:"2-digit",month:"short",year:"numeric"})}</td>
+                          <td style={{ padding: "8px 10px", color: "var(--color-text-secondary)" }}>{new Date(v.fecha_local).toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"})}</td>
+                          <td style={{ padding: "8px 10px" }}>{v.cliente_nombre}</td>
+                          <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 600 }}>{parseFloat(v.cantidad)}</td>
+                          <td style={{ padding: "8px 10px", textAlign: "right", color: "var(--color-text-secondary)" }}>{fmt(v.precio_unitario)}</td>
+                          <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 700, color: "#60A5FA" }}>{fmt(v.subtotal)}</td>
+                          <td style={{ padding: "8px 10px", textTransform: "capitalize", color: "var(--color-text-secondary)" }}>{v.metodo_pago}</td>
+                          <td style={{ padding: "8px 10px" }}>
+                            <button onClick={() => setTicketId(v.venta_id)} style={{ padding: "4px 10px", background: "var(--color-background-tertiary)", border: "1px solid var(--color-border-secondary)", borderRadius: 6, cursor: "pointer", fontSize: 11, whiteSpace: "nowrap" }}>🧾 Ticket</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            }
+          </>
+        )}
+        <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end" }}>
+          <button onClick={onClose} style={{ padding: "9px 20px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13 }}>Cerrar</button>
+        </div>
+      </div>
+
+      {/* Ticket preview anidado */}
+      {ticketId && <ModalTicket ventaId={ticketId} onClose={() => setTicketId(null)} />}
+    </div>
+  );
+}
+
 function Inventario({ onNuevoProducto, filtroStockBajoInicial = false }) {
   const [productos, setProductos] = useState([]);
   const [buscar, setBuscar] = useState("");
@@ -558,6 +647,7 @@ function Inventario({ onNuevoProducto, filtroStockBajoInicial = false }) {
   const [fotoModal, setFotoModal] = useState(null); // producto seleccionado
   const [soloStockBajo, setSoloStockBajo] = useState(filtroStockBajoInicial);
   const [editando, setEditando] = useState(null); // producto que se está editando
+  const [ventasProducto, setVentasProducto] = useState(null);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -612,6 +702,7 @@ function Inventario({ onNuevoProducto, filtroStockBajoInicial = false }) {
                         : <span style={{ background: "#D1FAE5", color: "#065F46", fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20 }}>OK</span>}
                     </td>
                     <td style={{ padding: "8px 14px" }}>
+                      <button onClick={() => setVentasProducto(p)} style={{ padding: "5px 10px", background: "none", border: "1px solid var(--color-border-secondary)", borderRadius: 6, cursor: "pointer", fontSize: 11, whiteSpace: "nowrap", marginRight: 4 }}>📊 Ventas</button>
                       <button onClick={() => setEditando(p)} style={{ padding: "5px 12px", background: "var(--color-background-tertiary)", border: "1px solid var(--color-border-secondary)", borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>✏️ Editar</button>
                     </td>
                   </tr>
@@ -622,6 +713,7 @@ function Inventario({ onNuevoProducto, filtroStockBajoInicial = false }) {
       )}
       {fotoModal && <ModalFotosProducto producto={fotoModal} onClose={() => setFotoModal(null)} onSaved={() => { setFotoModal(null); cargar(); }} />}
       {editando && <ModalProducto producto={editando} onClose={() => setEditando(null)} onSaved={() => { setEditando(null); cargar(); }} />}
+      {ventasProducto && <ModalVentasProducto producto={ventasProducto} onClose={() => setVentasProducto(null)} />}
     </div>
   );
 }
@@ -2055,10 +2147,11 @@ function Reportes() {
   const isMobile = useIsMobile();
   const [tab, setTab] = useState("ventas");
   const TABS = [
-    { id: "ventas",     label: "Ventas",                   icon: "💰" },
-    { id: "productos",  label: "Más vendido",               icon: "🏆" },
-    { id: "vendedores", label: "Por vendedor",              icon: "🧾" },
-    { id: "llantas",    label: "Llantas recibidas",         icon: "📥" },
+    { id: "ventas",     label: "Ventas",             icon: "💰" },
+    { id: "productos",  label: "Más vendido",         icon: "🏆" },
+    { id: "vendedores", label: "Por vendedor",        icon: "🧾" },
+    { id: "llantas",    label: "Llantas recibidas",   icon: "📥" },
+    { id: "inventario", label: "Inventario actual",   icon: "📦" },
   ];
   return (
     <div>
@@ -2075,10 +2168,11 @@ function Reportes() {
           }}>{t.icon} {t.label}</button>
         ))}
       </div>
-      {tab === "ventas" && <ReporteVentas />}
-      {tab === "productos" && <ReporteProductoMasVendido />}
+      {tab === "ventas"     && <ReporteVentas />}
+      {tab === "productos"  && <ReporteProductoMasVendido />}
       {tab === "vendedores" && <ReporteCotizacionesPorVendedor />}
-      {tab === "llantas" && <ReporteLlantasPorMes />}
+      {tab === "llantas"    && <ReporteLlantasPorMes />}
+      {tab === "inventario" && <ReporteInventarioActual />}
     </div>
   );
 }
@@ -2971,6 +3065,138 @@ function Cotizaciones() {
                 );
               })}
             </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Reporte de inventario actual ────────────────────────────────────────────
+function ReporteInventarioActual() {
+  const [data, setData]     = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.reporteInventario()
+      .then(r => setData(r.data || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Exportar como CSV (Excel lo abre nativamente)
+  const exportarExcel = () => {
+    const BOM  = '\uFEFF';
+    const cols = ['SKU','Nombre','Medida','Marca','Categoría','Stock','Stock mín.','Precio venta','Precio compra','Valor inventario','Total vendido'];
+    const filas = data.map(p => [
+      p.sku || '', p.nombre, p.medida || '', p.marca || '',
+      p.categoria || '', p.stock_actual, p.stock_minimo,
+      p.precio_venta, p.precio_compra || 0,
+      (parseFloat(p.stock_actual) * parseFloat(p.precio_venta)).toFixed(2),
+      p.total_vendido || 0,
+    ]);
+    const totValor = data.reduce((s,p) => s + parseFloat(p.stock_actual)*parseFloat(p.precio_venta), 0);
+    filas.push(['','','','','','','','','TOTAL', totValor.toFixed(2), '']);
+    const csv = BOM + [cols, ...filas].map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const a   = document.createElement('a');
+    a.href    = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+    a.download = `inventario_${new Date().toLocaleDateString('es-MX').replace(/\//g,'-')}.csv`;
+    a.click();
+  };
+
+  // Exportar como PDF (ventana imprimible)
+  const exportarPDF = () => {
+    const totValor = data.reduce((s,p) => s + parseFloat(p.stock_actual)*parseFloat(p.precio_venta), 0);
+    const totUnid  = data.reduce((s,p) => s + parseFloat(p.stock_actual), 0);
+    const filas    = data.map(p => `
+      <tr>
+        <td>${p.nombre}${p.medida ? ` <span style="color:#666;font-size:10px">${p.medida}</span>` : ''}</td>
+        <td>${p.marca || '—'}</td>
+        <td>${p.categoria || '—'}</td>
+        <td style="text-align:right">${parseFloat(p.stock_actual)}</td>
+        <td style="text-align:right">$${parseFloat(p.precio_venta).toFixed(2)}</td>
+        <td style="text-align:right;font-weight:600">$${(parseFloat(p.stock_actual)*parseFloat(p.precio_venta)).toFixed(2)}</td>
+        <td style="text-align:right;color:#555">${p.total_vendido || 0}</td>
+      </tr>`).join('');
+    const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+    <title>Inventario actual</title>
+    <style>
+      *{margin:0;padding:0;box-sizing:border-box}
+      body{font-family:Arial,sans-serif;font-size:11px;padding:20px}
+      h1{font-size:16px;margin-bottom:4px} .sub{font-size:11px;color:#666;margin-bottom:16px}
+      table{width:100%;border-collapse:collapse}
+      th{background:#f0f0f0;padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase}
+      td{padding:5px 8px;border-bottom:1px solid #eee;vertical-align:top}
+      .total{font-weight:700;background:#f8f8f8}
+      button{margin-top:16px;padding:8px 20px;background:#111;color:#fff;border:none;border-radius:4px;cursor:pointer}
+      @media print{button{display:none}}
+    </style></head><body>
+    <h1>📦 Inventario actual</h1>
+    <div class="sub">Generado el ${new Date().toLocaleString('es-MX',{timeZone:'America/Mexico_City'})} · ${data.length} producto(s) con existencia</div>
+    <table>
+      <thead><tr><th>Producto</th><th>Marca</th><th>Categoría</th><th style="text-align:right">Stock</th><th style="text-align:right">P. Venta</th><th style="text-align:right">Valor</th><th style="text-align:right">Vendido</th></tr></thead>
+      <tbody>${filas}</tbody>
+      <tfoot><tr class="total"><td colspan="3">TOTALES</td><td style="text-align:right">${totUnid.toFixed(0)}</td><td></td><td style="text-align:right">$${totValor.toFixed(2)}</td><td></td></tr></tfoot>
+    </table>
+    <button onclick="window.print()">🖨 Imprimir / Guardar PDF</button>
+    </body></html>`;
+    const w = window.open('','_blank','width=900,height=700');
+    w.document.write(html); w.document.close(); w.focus();
+  };
+
+  const totValor = data.reduce((s,p) => s + parseFloat(p.stock_actual)*parseFloat(p.precio_venta), 0);
+  const totUnid  = data.reduce((s,p) => s + parseFloat(p.stock_actual), 0);
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
+        <div style={{ display: "flex", gap: 16 }}>
+          <div><span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Productos con stock</span><div style={{ fontWeight: 700, fontSize: 18 }}>{data.length}</div></div>
+          <div><span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Unidades totales</span><div style={{ fontWeight: 700, fontSize: 18 }}>{totUnid.toFixed(0)}</div></div>
+          <div><span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Valor total inventario</span><div style={{ fontWeight: 700, fontSize: 18, color: "#60A5FA" }}>{fmt(totValor)}</div></div>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={exportarExcel} style={{ padding: "8px 16px", background: "#059669", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>📊 Excel / CSV</button>
+          <button onClick={exportarPDF}   style={{ padding: "8px 16px", background: "#111", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>🖨 PDF</button>
+        </div>
+      </div>
+
+      {loading ? <div style={{ textAlign: "center", padding: 40, color: "var(--color-text-secondary)" }}>Cargando inventario...</div> : (
+        <div style={{ background: "var(--color-background-secondary)", borderRadius: 12, border: "1px solid var(--color-border-tertiary)", overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead><tr style={{ background: "var(--color-background-tertiary)" }}>
+              {["Producto","Medida","Marca","Categoría","Stock","P. Venta","Valor","Vendido"].map((h,i) =>
+                <th key={h} style={{ padding: "10px 12px", textAlign: i>=4?"right":"left", fontSize: 11, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase" }}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {data.length === 0
+                ? <tr><td colSpan={8} style={{ padding: 40, textAlign: "center", color: "var(--color-text-secondary)" }}>Sin productos con existencia</td></tr>
+                : data.map((p,i) => (
+                  <tr key={p.id} style={{ borderTop: "1px solid var(--color-border-tertiary)", background: p.stock_actual <= p.stock_minimo ? "rgba(239,68,68,0.04)" : "none" }}>
+                    <td style={{ padding: "9px 12px", fontWeight: 600 }}>
+                      {p.nombre}
+                      {p.stock_actual <= p.stock_minimo && <span style={{ marginLeft: 6, fontSize: 10, background: "#FEE2E2", color: "#B91C1C", borderRadius: 4, padding: "1px 5px" }}>⚠ Stock bajo</span>}
+                    </td>
+                    <td style={{ padding: "9px 12px", color: "var(--color-text-secondary)" }}>{p.medida || "—"}</td>
+                    <td style={{ padding: "9px 12px", color: "var(--color-text-secondary)" }}>{p.marca || "—"}</td>
+                    <td style={{ padding: "9px 12px", color: "var(--color-text-secondary)" }}>{p.categoria || "—"}</td>
+                    <td style={{ padding: "9px 12px", textAlign: "right", fontWeight: 700 }}>{parseFloat(p.stock_actual)}</td>
+                    <td style={{ padding: "9px 12px", textAlign: "right" }}>{fmt(p.precio_venta)}</td>
+                    <td style={{ padding: "9px 12px", textAlign: "right", fontWeight: 600, color: "#60A5FA" }}>{fmt(parseFloat(p.stock_actual)*parseFloat(p.precio_venta))}</td>
+                    <td style={{ padding: "9px 12px", textAlign: "right", color: "var(--color-text-secondary)" }}>{p.total_vendido || 0}</td>
+                  </tr>
+                ))
+              }
+            </tbody>
+            <tfoot>
+              <tr style={{ background: "var(--color-background-tertiary)", fontWeight: 700 }}>
+                <td colSpan={4} style={{ padding: "10px 12px", fontSize: 12 }}>TOTALES</td>
+                <td style={{ padding: "10px 12px", textAlign: "right" }}>{totUnid.toFixed(0)}</td>
+                <td></td>
+                <td style={{ padding: "10px 12px", textAlign: "right", color: "#60A5FA" }}>{fmt(totValor)}</td>
+                <td></td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       )}

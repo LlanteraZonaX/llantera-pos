@@ -9,8 +9,7 @@ import * as compras     from '../controllers/compras.controller.js';
 import * as gastos      from '../controllers/gastos.controller.js';
 import * as ventas      from '../controllers/ventas.controller.js';
 import * as ordenes     from '../controllers/ordenes.controller.js';
-import * as reportes    from '../controllers/reportes.controller.js';
-import * as cotizaciones from '../controllers/cotizaciones.controller.js';
+import * as reportes    from '../controllers/reportes.controller.js';import * as cotizaciones from '../controllers/cotizaciones.controller.js';
 import * as usuarios    from '../controllers/usuarios.controller.js';
 import * as negocio     from '../controllers/negocio.controller.js';
 import * as lotes       from '../controllers/lotes.controller.js';
@@ -79,6 +78,8 @@ r.get ('/reportes/utilidad',              authenticate, reportes.utilidadBruta);
 r.get ('/reportes/producto-mas-vendido',  authenticate, reportes.productoMasVendido);
 r.get ('/reportes/cotizaciones-vendedor', authenticate, reportes.cotizacionesPorVendedor);
 r.get ('/reportes/llantas-mes',           authenticate, reportes.llantasPorMes);
+r.get ('/reportes/inventario',            authenticate, reportes.inventarioActual);
+r.get ('/reportes/producto/:producto_id/ventas', authenticate, reportes.ventasPorProducto);
 
 // ── Cotizaciones ──────────────────────────────────────────────────────────────
 r.get ('/cotizaciones',                   authenticate, cotizaciones.listar);
