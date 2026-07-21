@@ -618,7 +618,7 @@ function ModalVentasProducto({ producto, onClose }) {
                           <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 700, color: "#60A5FA" }}>{fmt(v.subtotal)}</td>
                           <td style={{ padding: "8px 10px", textTransform: "capitalize", color: "var(--color-text-secondary)" }}>{v.metodo_pago}</td>
                           <td style={{ padding: "8px 10px" }}>
-                            <button onClick={() => setTicketId(v.venta_id)} style={{ padding: "4px 10px", background: "var(--color-background-tertiary)", border: "1px solid var(--color-border-secondary)", borderRadius: 6, cursor: "pointer", fontSize: 11, whiteSpace: "nowrap" }}>🧾 Ticket</button>
+                            <button onClick={() => setTicketId(v.venta_id)} style={{ padding: "4px 10px", background: "var(--color-background-tertiary)", border: "1px solid var(--color-border-secondary)", borderRadius: 6, cursor: "pointer", fontSize: 11, whiteSpace: "nowrap", color: "#fff" }}>🧾 Ticket</button>
                           </td>
                         </tr>
                       ))}
@@ -630,7 +630,7 @@ function ModalVentasProducto({ producto, onClose }) {
           </>
         )}
         <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end" }}>
-          <button onClick={onClose} style={{ padding: "9px 20px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13 }}>Cerrar</button>
+          <button onClick={onClose} style={{ padding: "9px 20px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13, color: "#fff" }}>Cerrar</button>
         </div>
       </div>
 
@@ -702,8 +702,8 @@ function Inventario({ onNuevoProducto, filtroStockBajoInicial = false }) {
                         : <span style={{ background: "#D1FAE5", color: "#065F46", fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20 }}>OK</span>}
                     </td>
                     <td style={{ padding: "8px 14px" }}>
-                      <button onClick={() => setVentasProducto(p)} style={{ padding: "5px 10px", background: "none", border: "1px solid var(--color-border-secondary)", borderRadius: 6, cursor: "pointer", fontSize: 11, whiteSpace: "nowrap", marginRight: 4 }}>📊 Ventas</button>
-                      <button onClick={() => setEditando(p)} style={{ padding: "5px 12px", background: "var(--color-background-tertiary)", border: "1px solid var(--color-border-secondary)", borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>✏️ Editar</button>
+                      <button onClick={() => setVentasProducto(p)} style={{ padding: "5px 10px", background: "none", border: "1px solid var(--color-border-secondary)", borderRadius: 6, cursor: "pointer", fontSize: 11, whiteSpace: "nowrap", marginRight: 4, color: "#fff" }}>📊 Ventas</button>
+                      <button onClick={() => setEditando(p)} style={{ padding: "5px 12px", background: "var(--color-background-tertiary)", border: "1px solid var(--color-border-secondary)", borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", color: "#fff" }}>✏️ Editar</button>
                     </td>
                   </tr>
                 ))}
