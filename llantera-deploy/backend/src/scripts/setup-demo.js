@@ -297,19 +297,18 @@ try {
       if (!items.length) continue;
 
       total = fmt2(total);
+      // FIX: prefijo "D-" en lugar de "VTA-" para no colisionar con ZonaX
       const folio   = `D-2026-${String(folioN++).padStart(6,'0')}`;
       const ventaId = uuid();
-
-      // INSERT sin "subtotal" (GENERATED ALWAYS en esta DB).
-      // total, iva, descuento son columnas normales y se insertan directamente.
-      // monto_pagado = $7 (total numérico), metodo_pago = $8 (string).
+      // No insertar subtotal/iva/total directamente — pueden ser GENERATED.
+      // Se calculan/actualizan después de insertar el detalle.
       await client.query(
         `INSERT INTO ventas
            (id,negocio_id,folio,cliente_id,usuario_id,fecha,
-            descuento,iva,total,metodo_pago,monto_pagado,cambio,estado)
-         VALUES ($1,$2,$3,$4,$5,$6,0,0,$7,$8,$7,0,'pagada')
+            metodo_pago,monto_pagado,cambio,estado)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$7,0,'pagada')
          ON CONFLICT DO NOTHING`,
-        [ventaId, NID, folio, cliId, adminId, fecha.toISOString(), total, metodo]
+        [ventaId, NID, folio, cliId, adminId, fecha.toISOString(), metodo, total]
       );
 
       for (const it of items) {
@@ -320,10 +319,13 @@ try {
         );
       }
 
-      // Intentar actualizar subtotal después del detalle (GENERATED — falla silenciosamente)
+      // Intentar actualizar totales (con try/catch: si son GENERATED se ignora)
       try {
-        await client.query(`UPDATE ventas SET subtotal=$1 WHERE id=$2`, [total, ventaId]);
-      } catch (_) { /* subtotal es GENERATED — PostgreSQL lo calcula automáticamente */ }
+        await client.query(
+          `UPDATE ventas SET subtotal=$1, descuento=0, iva=0, total=$1, monto_pagado=$1 WHERE id=$2`,
+          [total, ventaId]
+        );
+      } catch (_) { /* columnas GENERATED — PostgreSQL las calcula sola */ }
       ventasCreadas++;
     }
     console.log(`✅  ${ventasCreadas} venta(s) de muestra creada(s)`);
