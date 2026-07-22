@@ -1,398 +1,372 @@
 /**
- * setup-demo.js
- * Crea el negocio "Demo Llantera POS" con datos de muestra realistas.
+ * setup-demo.js — Crea el negocio "Demo Llantera POS" con datos de muestra.
  * Credenciales: admin@demo.com / admin123
  *
- * Uso en Railway Console:
- *   node src/scripts/setup-demo.js
+ * Uso:   node src/scripts/setup-demo.js
+ * Reset: node src/scripts/setup-demo.js --reset
  *
- * Es idempotente — se puede correr múltiples veces sin duplicar datos.
- * Para resetear los datos de demo: node src/scripts/setup-demo.js --reset
+ * Es IDEMPOTENTE: se puede correr múltiples veces sin errores ni duplicados.
  */
-
-import { getClient, query } from '../config/db.js';
+import { getClient } from '../config/db.js';
 import bcrypt from 'bcryptjs';
 import { v4 as uuid } from 'uuid';
 import dotenv from 'dotenv';
 dotenv.config();
 
 const RESET = process.argv.includes('--reset');
+const rnd    = (arr) => arr[Math.floor(Math.random() * arr.length)];
+const rndN   = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+const fmt2   = (n) => parseFloat(parseFloat(n).toFixed(2));
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-const rnd = (arr) => arr[Math.floor(Math.random() * arr.length)];
-const rndNum = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
-
-// Fecha aleatoria dentro de los últimos N días, en horario de trabajo (9am-8pm MX)
 const fechaAleatoria = (diasAtras) => {
   const d = new Date();
   d.setDate(d.getDate() - diasAtras);
-  d.setHours(rndNum(9, 20), rndNum(0, 59), 0, 0);
+  d.setHours(rndN(9, 20), rndN(0, 59), 0, 0);
   return d;
 };
 
-// Formatear dinero
-const fmt2 = (n) => parseFloat(n.toFixed(2));
-
 // ── Datos de muestra ──────────────────────────────────────────────────────────
-const PRODUCTOS_DEMO = [
-  // Llantas seminuevas
-  { nombre: 'LLANTA SEMINUEVA', medida: '185/60/R14', marca: 'HANKOOK',      precio_venta: 650,  precio_compra: 400, stock: 18, tipo: 'llanta' },
-  { nombre: 'LLANTA SEMINUEVA', medida: '195/65/R15', marca: 'GOODYEAR',     precio_venta: 750,  precio_compra: 480, stock: 14, tipo: 'llanta' },
-  { nombre: 'LLANTA SEMINUEVA', medida: '205/55/R16', marca: 'BRIDGESTONE',  precio_venta: 850,  precio_compra: 550, stock: 10, tipo: 'llanta' },
-  { nombre: 'LLANTA SEMINUEVA', medida: '225/45/R17', marca: 'MICHELIN',     precio_venta: 1100, precio_compra: 720, stock: 7,  tipo: 'llanta' },
-  { nombre: 'LLANTA SEMINUEVA', medida: '235/55/R18', marca: 'CONTINENTAL',  precio_venta: 1350, precio_compra: 900, stock: 5,  tipo: 'llanta' },
-  { nombre: 'LLANTA SEMINUEVA', medida: '215/60/R16', marca: 'YOKOHAMA',     precio_venta: 950,  precio_compra: 620, stock: 9,  tipo: 'llanta' },
-  { nombre: 'LLANTA NUEVA',     medida: '185/60/R14', marca: 'HANKOOK',      precio_venta: 1200, precio_compra: 800, stock: 6,  tipo: 'llanta' },
-  { nombre: 'LLANTA NUEVA',     medida: '195/65/R15', marca: 'GOODYEAR',     precio_venta: 1450, precio_compra: 950, stock: 4,  tipo: 'llanta' },
-  // Refacciones / consumibles
-  { nombre: 'PARCHE',           medida: '#4 GRANDE',  marca: 'REMA',         precio_venta: 25,   precio_compra: 10,  stock: 200, tipo: 'refaccion' },
-  { nombre: 'PARCHE',           medida: '#3 MEDIANO', marca: 'REMA',         precio_venta: 18,   precio_compra: 7,   stock: 200, tipo: 'refaccion' },
-  { nombre: 'PARCHE',           medida: '#2 PEQUEÑO', marca: 'REMA',         precio_venta: 12,   precio_compra: 5,   stock: 200, tipo: 'refaccion' },
-  { nombre: 'VALVULA',          medida: 'TR4 ESTANDAR', marca: 'AIRTEC',    precio_venta: 15,   precio_compra: 5,   stock: 100, tipo: 'refaccion' },
-  { nombre: 'LIQUIDO MONTA LLANTAS', medida: '1 LT',  marca: 'GENERICO',   precio_venta: 40,   precio_compra: 18,  stock: 30,  tipo: 'consumible' },
-  { nombre: 'PESA BALANCEO',    medida: '5g',         marca: 'GENERICO',    precio_venta: 3,    precio_compra: 1,   stock: 500, tipo: 'refaccion' },
-  // Servicios
-  { nombre: 'BALANCEO',         medida: 'por llanta', marca: null,           precio_venta: 80,   precio_compra: 0,   stock: 0,   tipo: 'servicio', es_servicio: true },
-  { nombre: 'MONTAJE',          medida: 'por llanta', marca: null,           precio_venta: 60,   precio_compra: 0,   stock: 0,   tipo: 'servicio', es_servicio: true },
-  { nombre: 'ALINEACION',       medida: '4 ruedas',   marca: null,           precio_venta: 350,  precio_compra: 0,   stock: 0,   tipo: 'servicio', es_servicio: true },
-  { nombre: 'REPARACION PONCHE',medida: 'parche interno', marca: null,      precio_venta: 120,  precio_compra: 15,  stock: 0,   tipo: 'servicio', es_servicio: true },
+const PRODUCTOS = [
+  { nombre:'LLANTA SEMINUEVA', medida:'185/60/R14', marca:'HANKOOK',     pv:650,  pc:400, stock:18, tipo:'llanta'    },
+  { nombre:'LLANTA SEMINUEVA', medida:'195/65/R15', marca:'GOODYEAR',    pv:750,  pc:480, stock:14, tipo:'llanta'    },
+  { nombre:'LLANTA SEMINUEVA', medida:'205/55/R16', marca:'BRIDGESTONE', pv:850,  pc:550, stock:10, tipo:'llanta'    },
+  { nombre:'LLANTA SEMINUEVA', medida:'225/45/R17', marca:'MICHELIN',    pv:1100, pc:720, stock:7,  tipo:'llanta'    },
+  { nombre:'LLANTA SEMINUEVA', medida:'235/55/R18', marca:'CONTINENTAL', pv:1350, pc:900, stock:5,  tipo:'llanta'    },
+  { nombre:'LLANTA SEMINUEVA', medida:'215/60/R16', marca:'YOKOHAMA',    pv:950,  pc:620, stock:9,  tipo:'llanta'    },
+  { nombre:'LLANTA NUEVA',     medida:'185/60/R14', marca:'HANKOOK',     pv:1200, pc:800, stock:6,  tipo:'llanta'    },
+  { nombre:'LLANTA NUEVA',     medida:'195/65/R15', marca:'GOODYEAR',    pv:1450, pc:950, stock:4,  tipo:'llanta'    },
+  { nombre:'PARCHE',           medida:'#4 GRANDE',  marca:'REMA',        pv:25,   pc:10,  stock:200,tipo:'refaccion'  },
+  { nombre:'PARCHE',           medida:'#3 MEDIANO', marca:'REMA',        pv:18,   pc:7,   stock:200,tipo:'refaccion'  },
+  { nombre:'PARCHE',           medida:'#2 PEQUENO', marca:'REMA',        pv:12,   pc:5,   stock:200,tipo:'refaccion'  },
+  { nombre:'VALVULA',          medida:'TR4',        marca:'AIRTEC',      pv:15,   pc:5,   stock:100,tipo:'refaccion'  },
+  { nombre:'LIQUIDO MONTA',    medida:'1 LT',       marca:'GENERICO',    pv:40,   pc:18,  stock:30, tipo:'consumible' },
+  { nombre:'PESA BALANCEO',    medida:'5g',         marca:'GENERICO',    pv:3,    pc:1,   stock:500,tipo:'refaccion'  },
+  { nombre:'BALANCEO',         medida:'x llanta',   marca:null,          pv:80,   pc:0,   stock:0,  tipo:'servicio', svc:true },
+  { nombre:'MONTAJE',          medida:'x llanta',   marca:null,          pv:60,   pc:0,   stock:0,  tipo:'servicio', svc:true },
+  { nombre:'ALINEACION',       medida:'4 ruedas',   marca:null,          pv:350,  pc:0,   stock:0,  tipo:'servicio', svc:true },
+  { nombre:'REPARACION PONCHE',medida:'parche int', marca:null,          pv:120,  pc:15,  stock:0,  tipo:'servicio', svc:true },
 ];
 
-const CLIENTES_DEMO = [
-  { nombre: 'Carlos Martínez López',   telefono: '8112345678', email: 'carlos.ml@gmail.com',  direccion: 'Av. Constitución 1500, Monterrey' },
-  { nombre: 'María Fernanda García',   telefono: '8198765432', email: 'mfgarcia@hotmail.com', direccion: 'Calle Hidalgo 456, San Pedro' },
-  { nombre: 'Roberto Sánchez Tirado',  telefono: '8187654321', email: null,                   direccion: 'Col. Industrial, Monterrey' },
-  { nombre: 'Transporte Norteño S.A.', telefono: '8133445566', email: 'flota@transnorteno.mx', direccion: 'Blvd. Luis Donaldo Colosio 2200' },
-  { nombre: 'Ana Lucía Reyes',         telefono: '8145678901', email: 'ana.reyes@gmail.com',  direccion: null },
-  { nombre: 'Distribuidora del Norte', telefono: '8156789012', email: 'ventas@distnorte.com', direccion: 'Zona Industrial Apodaca' },
+const CLIENTES = [
+  { nombre:'Carlos Martinez Lopez',   tel:'8112345678', email:'carlos.ml@gmail.com'  },
+  { nombre:'Maria Fernanda Garcia',   tel:'8198765432', email:'mfgarcia@hotmail.com' },
+  { nombre:'Roberto Sanchez Tirado',  tel:'8187654321', email:null                   },
+  { nombre:'Transporte Norteno SA',   tel:'8133445566', email:'flota@transnorteno.mx'},
+  { nombre:'Ana Lucia Reyes',         tel:'8145678901', email:'ana.reyes@gmail.com'  },
+  { nombre:'Distribuidora del Norte', tel:'8156789012', email:'ventas@distnorte.com' },
 ];
 
-const GASTOS_DEMO = [
-  { descripcion: 'RENTA DEL LOCAL',             monto: 8500, cat: 'Renta',     diasAtras: 25 },
-  { descripcion: 'PAGO SERVICIO ELECTRICO CFE', monto: 1240, cat: 'Servicios', diasAtras: 22 },
-  { descripcion: 'SUELDO TECNICO MARZO 1/2',    monto: 3500, cat: 'Sueldos',   diasAtras: 20 },
-  { descripcion: 'COMPRA MATERIAL LIMPIEZA',    monto: 380,  cat: 'Materiales',diasAtras: 18 },
-  { descripcion: 'PUBLICIDAD FACEBOOK ADS',     monto: 500,  cat: 'Publicidad',diasAtras: 15 },
-  { descripcion: 'SUELDO TECNICO MARZO 2/2',    monto: 3500, cat: 'Sueldos',   diasAtras: 10 },
-  { descripcion: 'AGUA PURIFICADA',             monto: 120,  cat: 'Servicios', diasAtras: 8  },
-  { descripcion: 'HERRAMIENTA DESMONTADORA',    monto: 1800, cat: 'Equipos',   diasAtras: 5  },
-  { descripcion: 'GASOLINA REPARTO',            monto: 650,  cat: 'Transporte',diasAtras: 3  },
-  { descripcion: 'MATERIAL PAPELERIA',          monto: 220,  cat: 'Materiales',diasAtras: 1  },
+const GASTOS = [
+  { desc:'RENTA DEL LOCAL',            monto:8500, cat:'Renta',      dias:25 },
+  { desc:'PAGO SERVICIO ELECTRICO CFE',monto:1240, cat:'Servicios',  dias:22 },
+  { desc:'SUELDO TECNICO 1era QUINCENA',monto:3500,cat:'Sueldos',    dias:20 },
+  { desc:'COMPRA MATERIAL LIMPIEZA',   monto:380,  cat:'Materiales', dias:18 },
+  { desc:'PUBLICIDAD FACEBOOK ADS',    monto:500,  cat:'Publicidad', dias:15 },
+  { desc:'SUELDO TECNICO 2da QUINCENA',monto:3500, cat:'Sueldos',    dias:10 },
+  { desc:'AGUA PURIFICADA',            monto:120,  cat:'Servicios',  dias:8  },
+  { desc:'HERRAMIENTA DESMONTADORA',   monto:1800, cat:'Equipos',    dias:5  },
+  { desc:'GASOLINA REPARTO',           monto:650,  cat:'Transporte', dias:3  },
+  { desc:'MATERIAL PAPELERIA',         monto:220,  cat:'Materiales', dias:1  },
 ];
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 const client = await getClient();
 try {
   await client.query('BEGIN');
-
   console.log('\n🚗  Setup Demo — Llantera POS\n');
 
-  // ── 0. Reset si se solicitó ──────────────────────────────────────────────
+  // ── 0. Reset ──────────────────────────────────────────────────────────────
   if (RESET) {
-    const { rows: [neg] } = await client.query(`SELECT id FROM negocios WHERE slug = 'demo' LIMIT 1`);
+    const { rows:[neg] } = await client.query(`SELECT id FROM negocios WHERE slug='demo' LIMIT 1`);
     if (neg) {
       const nid = neg.id;
-      console.log('⚠  Modo reset: eliminando datos del demo...');
-      await client.query(`DELETE FROM movimientos_inventario WHERE negocio_id = $1`, [nid]);
-      await client.query(`DELETE FROM ventas_detalle WHERE venta_id IN (SELECT id FROM ventas WHERE negocio_id = $1)`, [nid]);
-      await client.query(`DELETE FROM ventas WHERE negocio_id = $1`, [nid]);
-      await client.query(`DELETE FROM gastos WHERE negocio_id = $1`, [nid]);
-      await client.query(`DELETE FROM clientes WHERE negocio_id = $1`, [nid]);
-      await client.query(`DELETE FROM productos WHERE negocio_id = $1`, [nid]);
-      await client.query(`DELETE FROM marcas WHERE negocio_id = $1`, [nid]);
-      await client.query(`DELETE FROM usuarios WHERE negocio_id = $1`, [nid]);
-      // Roles son globales — NO se eliminan
-      await client.query(`DELETE FROM negocios WHERE id = $1`, [nid]);
-      console.log('✅  Datos del demo eliminados\n');
+      console.log('⚠  Reseteando datos del demo...');
+      await client.query(`DELETE FROM movimientos_inventario WHERE negocio_id=$1`,[nid]);
+      await client.query(`DELETE FROM ventas_detalle WHERE venta_id IN (SELECT id FROM ventas WHERE negocio_id=$1)`,[nid]);
+      await client.query(`DELETE FROM ventas     WHERE negocio_id=$1`,[nid]);
+      await client.query(`DELETE FROM gastos     WHERE negocio_id=$1`,[nid]);
+      await client.query(`DELETE FROM clientes   WHERE negocio_id=$1`,[nid]);
+      await client.query(`DELETE FROM productos  WHERE negocio_id=$1`,[nid]);
+      await client.query(`DELETE FROM marcas     WHERE negocio_id=$1`,[nid]);
+      await client.query(`DELETE FROM usuarios   WHERE negocio_id=$1`,[nid]);
+      await client.query(`DELETE FROM negocios   WHERE id=$1`,[nid]);
+      console.log('✅  Reset completo\n');
+    } else {
+      console.log('ℹ️  No hay demo que resetear\n');
     }
   }
 
   // ── 1. Negocio ────────────────────────────────────────────────────────────
-  let { rows: [negocio] } = await client.query(`SELECT id FROM negocios WHERE slug = 'demo' LIMIT 1`);
+  let { rows:[negocio] } = await client.query(`SELECT id FROM negocios WHERE slug='demo' LIMIT 1`);
   if (!negocio) {
     const negId = uuid();
     await client.query(
-      `INSERT INTO negocios (id, nombre, slug, activo, telefono, direccion)
-       VALUES ($1, 'Demo Llantera POS', 'demo', true, '8110001234', 'Av. Ejemplo 100, Col. Centro, Monterrey NL')`,
+      `INSERT INTO negocios (id,nombre,slug,activo,telefono,direccion)
+       VALUES ($1,'Demo Llantera POS','demo',true,'8110001234','Av. Ejemplo 100, Monterrey NL')`,
       [negId]
     );
     negocio = { id: negId };
     console.log('✅  Negocio demo creado');
   } else {
-    console.log('ℹ️   Negocio demo ya existe');
+    console.log('ℹ️  Negocio demo ya existe');
   }
-  const negocio_id = negocio.id;
+  const NID = negocio.id;
 
-  // ── 2. Roles (tabla global — sin negocio_id) ─────────────────────────────
-  let { rows: [rol] } = await client.query(`SELECT id FROM roles WHERE nombre = 'admin' LIMIT 1`);
-  if (!rol) {
-    const rolId = uuid();
-    await client.query(
-      `INSERT INTO roles (id, nombre, permisos) VALUES ($1, 'admin', '{"todo":true}')`,
-      [rolId]
-    );
-    rol = { id: rolId };
+  // ── 2. Roles (tabla global — sin negocio_id) ──────────────────────────────
+  let { rows:[rolAdmin] } = await client.query(`SELECT id FROM roles WHERE nombre='admin' LIMIT 1`);
+  if (!rolAdmin) {
+    const rid = uuid();
+    await client.query(`INSERT INTO roles (id,nombre,permisos) VALUES ($1,'admin','{"todo":true}')`, [rid]);
+    rolAdmin = { id: rid };
     console.log('✅  Rol admin creado');
   } else {
-    console.log('ℹ️   Rol admin ya existe');
+    console.log('ℹ️  Rol admin ya existe');
   }
 
-  // Rol vendedor
-  let { rows: [rolVend] } = await client.query(`SELECT id FROM roles WHERE nombre = 'vendedor' LIMIT 1`);
+  let { rows:[rolVend] } = await client.query(`SELECT id FROM roles WHERE nombre='vendedor' LIMIT 1`);
   if (!rolVend) {
-    const rolVId = uuid();
+    const rid = uuid();
     await client.query(
-      `INSERT INTO roles (id, nombre, permisos)
-       VALUES ($1, 'vendedor', '{"ventas":true,"productos_ver":true,"cotizaciones":true,"clientes":true}')`,
-      [rolVId]
+      `INSERT INTO roles (id,nombre,permisos) VALUES ($1,'vendedor','{"ventas":true,"productos_ver":true,"cotizaciones":true,"clientes":true}')`,
+      [rid]
     );
-    rolVend = { id: rolVId };
+    rolVend = { id: rid };
   }
 
   // ── 3. Usuarios ───────────────────────────────────────────────────────────
-  const hash = await bcrypt.hash('admin123', 10);
-  const { rows: [usuExiste] } = await client.query(
-    `SELECT id FROM usuarios WHERE email = 'admin@demo.com' AND negocio_id = $1`, [negocio_id]
-  );
+  const hashAdmin = await bcrypt.hash('admin123', 10);
+  let { rows:[uAdmin] } = await client.query(`SELECT id FROM usuarios WHERE email='admin@demo.com' AND negocio_id=$1`,[NID]);
   let adminId;
-  if (!usuExiste) {
+  if (!uAdmin) {
     adminId = uuid();
     await client.query(
-      `INSERT INTO usuarios (id, negocio_id, nombre, email, password_hash, rol_id, activo)
-       VALUES ($1, $2, 'Administrador Demo', 'admin@demo.com', $3, $4, true)`,
-      [adminId, negocio_id, hash, rol.id]
+      `INSERT INTO usuarios (id,negocio_id,nombre,email,password_hash,rol_id,activo)
+       VALUES ($1,$2,'Administrador Demo','admin@demo.com',$3,$4,true)`,
+      [adminId, NID, hashAdmin, rolAdmin.id]
     );
-    console.log('✅  Usuario admin@demo.com creado (password: admin123)');
+    console.log('✅  admin@demo.com creado (admin123)');
   } else {
-    adminId = usuExiste.id;
-    console.log('ℹ️   Usuario admin ya existe');
+    adminId = uAdmin.id;
+    console.log('ℹ️  admin@demo.com ya existe');
   }
 
-  // Vendedor demo
   const hashVend = await bcrypt.hash('demo123', 10);
-  const { rows: [vendExiste] } = await client.query(
-    `SELECT id FROM usuarios WHERE email = 'vendedor@demo.com' AND negocio_id = $1`, [negocio_id]
-  );
-  let vendedorId;
-  if (!vendExiste) {
-    vendedorId = uuid();
+  let { rows:[uVend] } = await client.query(`SELECT id FROM usuarios WHERE email='vendedor@demo.com' AND negocio_id=$1`,[NID]);
+  if (!uVend) {
     await client.query(
-      `INSERT INTO usuarios (id, negocio_id, nombre, email, password_hash, rol_id, activo)
-       VALUES ($1, $2, 'Vendedor Demo', 'vendedor@demo.com', $3, $4, true)`,
-      [vendedorId, negocio_id, hashVend, rolVend.id]
+      `INSERT INTO usuarios (id,negocio_id,nombre,email,password_hash,rol_id,activo)
+       VALUES ($1,$2,'Vendedor Demo','vendedor@demo.com',$3,$4,true)`,
+      [uuid(), NID, hashVend, rolVend.id]
     );
-    console.log('✅  Usuario vendedor@demo.com creado (password: demo123)');
-  } else {
-    vendedorId = vendExiste.id;
+    console.log('✅  vendedor@demo.com creado (demo123)');
   }
 
-  // ── 4. Categorías (tabla global — solo las que no existen) ────────────────
-  const tiposCategoria = ['llanta', 'refaccion', 'consumible', 'servicio'];
+  // ── 4. Categorías (tabla global) ──────────────────────────────────────────
+  const tiposCat = { llanta:'llanta', refaccion:'refaccion', consumible:'consumible', servicio:'servicio' };
   const catMap = {};
-  for (const tipo of tiposCategoria) {
+  for (const [tipo, tipoval] of Object.entries(tiposCat)) {
     const nombre = tipo.charAt(0).toUpperCase() + tipo.slice(1);
-    let { rows: [cat] } = await client.query(`SELECT id FROM categorias WHERE LOWER(nombre) = $1 LIMIT 1`, [nombre.toLowerCase()]);
+    let { rows:[cat] } = await client.query(
+      `SELECT id FROM categorias WHERE LOWER(TRIM(nombre))=$1 LIMIT 1`,[tipo]
+    );
     if (!cat) {
-      const catId = await client.query(`INSERT INTO categorias (nombre, tipo) VALUES ($1, $2) RETURNING id`, [nombre, tipo]);
-      cat = catId.rows[0];
+      const { rows:[nc] } = await client.query(
+        `INSERT INTO categorias (nombre,tipo) VALUES ($1,$2) RETURNING id`,[nombre, tipoval]
+      );
+      cat = nc;
     }
     catMap[tipo] = cat.id;
   }
   console.log('✅  Categorías verificadas');
 
   // ── 5. Marcas ─────────────────────────────────────────────────────────────
-  const marcasDemo = ['HANKOOK', 'GOODYEAR', 'BRIDGESTONE', 'MICHELIN', 'CONTINENTAL', 'YOKOHAMA', 'REMA', 'AIRTEC'];
-  for (const m of marcasDemo) {
+  const marcas = ['HANKOOK','GOODYEAR','BRIDGESTONE','MICHELIN','CONTINENTAL','YOKOHAMA','REMA','AIRTEC','GENERICO'];
+  for (const m of marcas) {
     await client.query(
-      `INSERT INTO marcas (negocio_id, nombre) VALUES ($1, $2) ON CONFLICT (negocio_id, nombre) DO NOTHING`,
-      [negocio_id, m]
+      `INSERT INTO marcas (negocio_id,nombre) VALUES ($1,$2) ON CONFLICT (negocio_id,nombre) DO NOTHING`,
+      [NID, m]
     );
   }
   console.log('✅  Marcas creadas');
 
   // ── 6. Productos ──────────────────────────────────────────────────────────
-  const prodIds = {};
+  // FIX: ON CONFLICT usa (negocio_id, sku) — constraint real: idx_productos_sku_negocio
+  // Además verificamos por nombre+medida para productos sin SKU
+  const prodMap = {};
   let prodCreados = 0;
-  for (const p of PRODUCTOS_DEMO) {
-    const sku = `DEMO-${p.nombre.substring(0,4).toUpperCase()}-${(p.medida||'SRV').replace(/[^a-zA-Z0-9]/g,'').substring(0,6).toUpperCase()}`;
-    const { rows: [exProd] } = await client.query(
-      `SELECT id FROM productos WHERE negocio_id = $1 AND nombre = $2 AND COALESCE(medida,'') = $3 LIMIT 1`,
-      [negocio_id, p.nombre, p.medida || '']
+  for (const p of PRODUCTOS) {
+    const key = `${p.nombre}_${p.medida}`;
+    // Verificar si ya existe por nombre+medida en este negocio
+    const { rows:[exProd] } = await client.query(
+      `SELECT id FROM productos WHERE negocio_id=$1 AND nombre=$2 AND COALESCE(medida,'')=$3 LIMIT 1`,
+      [NID, p.nombre, p.medida || '']
     );
-    if (!exProd) {
-      const pid = uuid();
-      await client.query(
-        `INSERT INTO productos (id, negocio_id, nombre, medida, marca, sku, precio_venta, precio_compra, stock_actual, stock_minimo, categoria_id, activo, es_servicio)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,true,$12)`,
-        [pid, negocio_id, p.nombre, p.medida||null, p.marca||null, sku,
-         p.precio_venta, p.precio_compra, p.stock, rndNum(2, 5),
-         catMap[p.tipo]||null, p.es_servicio||false]
-      );
-      prodIds[`${p.nombre}_${p.medida}`] = pid;
-      prodCreados++;
-    } else {
-      prodIds[`${p.nombre}_${p.medida}`] = exProd.id;
+    if (exProd) {
+      prodMap[key] = exProd.id;
+      continue;
     }
+    // SKU único por negocio — prefijo DEMO para no colisionar con datos reales
+    const sku = `DEMO-${p.nombre.replace(/\s+/g,'').substring(0,5)}-${(p.medida||'SVC').replace(/[^A-Z0-9]/gi,'').substring(0,6)}`.toUpperCase();
+    const pid = uuid();
+    await client.query(
+      `INSERT INTO productos
+         (id,negocio_id,nombre,medida,marca,sku,precio_venta,precio_compra,
+          stock_actual,stock_minimo,categoria_id,activo,es_servicio)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,true,$12)
+       ON CONFLICT (negocio_id,sku) WHERE sku IS NOT NULL DO NOTHING`,
+      [pid, NID, p.nombre, p.medida||null, p.marca||null, sku,
+       p.pv, p.pc, p.stock, rndN(2,5), catMap[p.tipo]||null, p.svc||false]
+    );
+    // Reconfirmar el id (puede que ON CONFLICT haya ignorado)
+    const { rows:[conf] } = await client.query(
+      `SELECT id FROM productos WHERE negocio_id=$1 AND nombre=$2 AND COALESCE(medida,'')=$3 LIMIT 1`,
+      [NID, p.nombre, p.medida || '']
+    );
+    if (conf) { prodMap[key] = conf.id; prodCreados++; }
   }
   console.log(`✅  ${prodCreados} producto(s) creado(s)`);
 
   // ── 7. Clientes ───────────────────────────────────────────────────────────
-  const clienteIds = [];
+  const clientIds = [];
   let clientesCreados = 0;
-  for (const c of CLIENTES_DEMO) {
-    const { rows: [exCli] } = await client.query(
-      `SELECT id FROM clientes WHERE negocio_id = $1 AND nombre = $2 LIMIT 1`, [negocio_id, c.nombre]
+  for (const c of CLIENTES) {
+    let { rows:[ex] } = await client.query(
+      `SELECT id FROM clientes WHERE negocio_id=$1 AND nombre=$2 LIMIT 1`,[NID, c.nombre]
     );
-    if (!exCli) {
+    if (!ex) {
       const cid = uuid();
       await client.query(
-        `INSERT INTO clientes (id, negocio_id, nombre, telefono, email, direccion) VALUES ($1,$2,$3,$4,$5,$6)`,
-        [cid, negocio_id, c.nombre, c.telefono, c.email||null, c.direccion||null]
+        `INSERT INTO clientes (id,negocio_id,nombre,telefono,email) VALUES ($1,$2,$3,$4,$5)`,
+        [cid, NID, c.nombre, c.tel, c.email||null]
       );
-      clienteIds.push(cid);
-      clientesCreados++;
+      clientIds.push(cid); clientesCreados++;
     } else {
-      clienteIds.push(exCli.id);
+      clientIds.push(ex.id);
     }
   }
   console.log(`✅  ${clientesCreados} cliente(s) creado(s)`);
 
-  // ── 8. Ventas de los últimos 30 días ─────────────────────────────────────
-  const { rows: existeVentas } = await client.query(
-    `SELECT COUNT(*) as cnt FROM ventas WHERE negocio_id = $1`, [negocio_id]
-  );
+  // ── 8. Ventas (últimos 30 días) ───────────────────────────────────────────
+  // FIX: Folio con prefijo "D-" para no colisionar con ventas reales de ZonaX
+  //      que usan "VTA-2026-XXXXXX"
+  const { rows:[cv] } = await client.query(`SELECT COUNT(*) AS cnt FROM ventas WHERE negocio_id=$1`,[NID]);
   let ventasCreadas = 0;
 
-  if (parseInt(existeVentas[0].cnt) === 0) {
-    // Productos más vendibles (llantas y servicios)
-    const prodVendibles = [
-      { key: 'LLANTA SEMINUEVA_185/60/R14', precio: 650,  costo: 400  },
-      { key: 'LLANTA SEMINUEVA_195/65/R15', precio: 750,  costo: 480  },
-      { key: 'LLANTA SEMINUEVA_205/55/R16', precio: 850,  costo: 550  },
-      { key: 'LLANTA SEMINUEVA_225/45/R17', precio: 1100, costo: 720  },
-      { key: 'LLANTA NUEVA_185/60/R14',     precio: 1200, costo: 800  },
-      { key: 'PARCHE_#4 GRANDE',            precio: 25,   costo: 10   },
-      { key: 'PARCHE_#3 MEDIANO',           precio: 18,   costo: 7    },
-      { key: 'BALANCEO_por llanta',         precio: 80,   costo: 0    },
-      { key: 'MONTAJE_por llanta',          precio: 60,   costo: 0    },
-      { key: 'REPARACION PONCHE_parche interno', precio: 120, costo: 15 },
-      { key: 'ALINEACION_4 ruedas',         precio: 350,  costo: 0    },
+  if (parseInt(cv.cnt) === 0) {
+    const vendibles = [
+      { key:'LLANTA SEMINUEVA_185/60/R14', pv:650  },
+      { key:'LLANTA SEMINUEVA_195/65/R15', pv:750  },
+      { key:'LLANTA SEMINUEVA_205/55/R16', pv:850  },
+      { key:'LLANTA SEMINUEVA_225/45/R17', pv:1100 },
+      { key:'LLANTA NUEVA_185/60/R14',     pv:1200 },
+      { key:'PARCHE_#4 GRANDE',            pv:25   },
+      { key:'PARCHE_#3 MEDIANO',           pv:18   },
+      { key:'BALANCEO_x llanta',           pv:80   },
+      { key:'MONTAJE_x llanta',            pv:60   },
+      { key:'REPARACION PONCHE_parche int',pv:120  },
+      { key:'ALINEACION_4 ruedas',         pv:350  },
     ];
-
     const metodos = ['efectivo','efectivo','efectivo','tarjeta','tarjeta','transferencia'];
-
-    // Generar ventas distribuidas en los últimos 30 días
-    // Más ventas en los últimos 7 días (para el dashboard)
-    const patronVentas = [
-      ...Array(3).fill(29), ...Array(3).fill(27), ...Array(4).fill(25),
-      ...Array(3).fill(22), ...Array(4).fill(20), ...Array(3).fill(18),
-      ...Array(4).fill(15), ...Array(3).fill(12), ...Array(4).fill(10),
+    // Distribución: más ventas en los últimos 7 días para que el dashboard se vea activo
+    const patronDias = [
+      ...Array(3).fill(29),...Array(3).fill(27),...Array(4).fill(25),
+      ...Array(3).fill(22),...Array(4).fill(20),...Array(3).fill(18),
+      ...Array(4).fill(15),...Array(3).fill(12),...Array(4).fill(10),
       ...Array(4).fill(7), ...Array(5).fill(6), ...Array(5).fill(5),
       ...Array(5).fill(4), ...Array(6).fill(3), ...Array(6).fill(2),
       ...Array(5).fill(1), ...Array(4).fill(0),
     ];
 
-    let folioNum = 1;
-    for (const diasAtras of patronVentas) {
-      const fecha    = fechaAleatoria(diasAtras);
-      const metodo   = rnd(metodos);
-      const clientId = Math.random() > 0.4 ? rnd(clienteIds) : null;
-      const numItems = rndNum(1, 3);
+    let folioN = 1;
+    for (const dias of patronDias) {
+      const fecha  = fechaAleatoria(dias);
+      const metodo = rnd(metodos);
+      const cliId  = Math.random() > 0.4 ? rnd(clientIds) : null;
+      const prods  = [...vendibles].sort(() => Math.random()-0.5).slice(0, rndN(1,3));
 
-      // Seleccionar productos aleatorios para esta venta
-      const itemsVenta = [];
-      const prodSel    = [...prodVendibles].sort(() => Math.random() - 0.5).slice(0, numItems);
-      let subtotalVenta = 0;
-
-      for (const pv of prodSel) {
-        const pid = prodIds[pv.key];
+      const items = [];
+      let total = 0;
+      for (const pv of prods) {
+        const pid = prodMap[pv.key];
         if (!pid) continue;
-        const cant      = pv.key.startsWith('LLANTA') ? rndNum(1, 2) : rndNum(1, 4);
-        const precio    = pv.precio;
-        const subtotal  = fmt2(cant * precio);
-        subtotalVenta  += subtotal;
-        itemsVenta.push({ pid, cant, precio, subtotal });
+        const cant  = pv.key.startsWith('LLANTA') ? rndN(1,2) : rndN(1,4);
+        const sub   = fmt2(cant * pv.pv);
+        total += sub;
+        items.push({ pid, cant, precio: pv.pv, sub });
       }
+      if (!items.length) continue;
 
-      if (itemsVenta.length === 0) continue;
-
-      const folio  = `VTA-2026-${String(folioNum++).padStart(6,'0')}`;
+      total = fmt2(total);
+      // FIX: prefijo "D-" en lugar de "VTA-" para no colisionar con ZonaX
+      const folio   = `D-2026-${String(folioN++).padStart(6,'0')}`;
       const ventaId = uuid();
 
       await client.query(
-        `INSERT INTO ventas (id, negocio_id, folio, cliente_id, usuario_id, fecha, subtotal, descuento, iva, total, metodo_pago, monto_pagado, cambio, estado)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,0,0,$7,$8,$7,0,'pagada')`,
-        [ventaId, negocio_id, folio, clientId, adminId, fecha.toISOString(), fmt2(subtotalVenta), metodo]
+        `INSERT INTO ventas
+           (id,negocio_id,folio,cliente_id,usuario_id,fecha,
+            subtotal,descuento,iva,total,metodo_pago,monto_pagado,cambio,estado)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,0,0,$7,$8,$7,0,'pagada')
+         ON CONFLICT DO NOTHING`,
+        [ventaId, NID, folio, cliId, adminId, fecha.toISOString(), total, metodo]
       );
 
-      for (const item of itemsVenta) {
+      for (const it of items) {
         await client.query(
-          `INSERT INTO ventas_detalle (venta_id, producto_id, cantidad, precio_unitario, subtotal)
-           VALUES ($1,$2,$3,$4,$5)`,
-          [ventaId, item.pid, item.cant, item.precio, item.subtotal]
+          `INSERT INTO ventas_detalle (venta_id,producto_id,cantidad,precio_unitario,subtotal)
+           VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`,
+          [ventaId, it.pid, it.cant, it.precio, it.sub]
         );
       }
-
       ventasCreadas++;
     }
     console.log(`✅  ${ventasCreadas} venta(s) de muestra creada(s)`);
   } else {
-    console.log('ℹ️   Ventas ya existen, se omiten');
+    console.log('ℹ️  Ventas ya existen, se omiten');
   }
 
   // ── 9. Gastos ─────────────────────────────────────────────────────────────
-  const { rows: existeGastos } = await client.query(
-    `SELECT COUNT(*) as cnt FROM gastos WHERE negocio_id = $1`, [negocio_id]
-  );
-  if (parseInt(existeGastos[0].cnt) === 0) {
-    // Categorías de gasto (tabla separada global)
-    const catGastoMap = {};
-    for (const g of GASTOS_DEMO) {
-      if (!catGastoMap[g.cat]) {
-        let { rows: [cg] } = await client.query(
-          `SELECT id FROM categorias_gasto WHERE LOWER(nombre) = $1 LIMIT 1`, [g.cat.toLowerCase()]
+  const { rows:[cg] } = await client.query(`SELECT COUNT(*) AS cnt FROM gastos WHERE negocio_id=$1`,[NID]);
+  if (parseInt(cg.cnt) === 0) {
+    const cgMap = {};
+    for (const g of GASTOS) {
+      if (!cgMap[g.cat]) {
+        let { rows:[cat] } = await client.query(
+          `SELECT id FROM categorias_gasto WHERE LOWER(nombre)=$1 LIMIT 1`,[g.cat.toLowerCase()]
         );
-        if (!cg) {
-          const { rows: [newCg] } = await client.query(
-            `INSERT INTO categorias_gasto (nombre) VALUES ($1) RETURNING id`, [g.cat]
+        if (!cat) {
+          const { rows:[nc] } = await client.query(
+            `INSERT INTO categorias_gasto (nombre) VALUES ($1) RETURNING id`,[g.cat]
           );
-          cg = newCg;
+          cat = nc;
         }
-        catGastoMap[g.cat] = cg.id;
+        cgMap[g.cat] = cat.id;
       }
     }
-
-    for (const g of GASTOS_DEMO) {
-      const fecha = fechaAleatoria(g.diasAtras);
+    for (const g of GASTOS) {
+      const f = fechaAleatoria(g.dias);
       await client.query(
-        `INSERT INTO gastos (negocio_id, categoria_id, descripcion, monto, fecha, metodo_pago, usuario_id)
+        `INSERT INTO gastos (negocio_id,categoria_id,descripcion,monto,fecha,metodo_pago,usuario_id)
          VALUES ($1,$2,$3,$4,$5,'efectivo',$6)`,
-        [negocio_id, catGastoMap[g.cat], g.descripcion, g.monto,
-         fecha.toISOString().split('T')[0], adminId]
+        [NID, cgMap[g.cat], g.desc, g.monto, f.toISOString().split('T')[0], adminId]
       );
     }
-    console.log(`✅  ${GASTOS_DEMO.length} gasto(s) de muestra creado(s)`);
+    console.log(`✅  ${GASTOS.length} gasto(s) de muestra creado(s)`);
   } else {
-    console.log('ℹ️   Gastos ya existen, se omiten');
+    console.log('ℹ️  Gastos ya existen, se omiten');
   }
 
   await client.query('COMMIT');
 
-  // ── Resumen final ─────────────────────────────────────────────────────────
   console.log('\n🎉  Demo listo!\n');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('  URL:       (misma URL de producción)');
-  console.log('  Email:     admin@demo.com');
-  console.log('  Password:  admin123');
-  console.log('');
-  console.log('  Email vendedor:     vendedor@demo.com');
-  console.log('  Password vendedor:  demo123');
+  console.log('  URL:      (misma URL de producción)');
+  console.log('  Admin:    admin@demo.com    /  admin123');
+  console.log('  Vendedor: vendedor@demo.com /  demo123');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
 } catch (err) {
   await client.query('ROLLBACK');
   console.error('\n❌  Error:', err.message);
-  console.error(err);
   process.exit(1);
 } finally {
   client.release();
