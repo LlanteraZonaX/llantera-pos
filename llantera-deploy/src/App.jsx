@@ -189,7 +189,7 @@ function ModalProducto({ producto, onClose, onSaved }) {
           </div>
         </div>
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 20 }}>
-          <button onClick={onClose} style={{ padding: "9px 20px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
+          <button onClick={onClose} style={{ padding: "9px 20px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13, color: "#fff" }}>Cancelar</button>
           <button onClick={guardar} disabled={loading} style={{ padding: "9px 24px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
             {loading ? "Guardando..." : esEdicion ? "Guardar cambios" : "Guardar producto"}
           </button>
@@ -253,7 +253,7 @@ function ModalCompra({ onClose, onSaved, productos }) {
           <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 600, fontSize: 15, marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--color-border-tertiary)" }}><span>Total</span><span style={{ color: "#1D4ED8" }}>{fmt(total * 1.16)}</span></div>
         </div>
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-          <button onClick={onClose} style={{ padding: "9px 20px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
+          <button onClick={onClose} style={{ padding: "9px 20px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13, color: "#fff" }}>Cancelar</button>
           <button onClick={guardar} disabled={loading} style={{ padding: "9px 24px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>{loading ? "Guardando..." : "Guardar compra"}</button>
         </div>
       </div>
@@ -305,7 +305,7 @@ function ModalGasto({ onClose, onSaved }) {
           <div><label style={labelStyle}>Notas</label><input style={inputStyle} placeholder="Referencia, número de recibo..." value={form.notas} onChange={e => f("notas", e.target.value)} /></div>
         </div>
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 20 }}>
-          <button onClick={onClose} style={{ padding: "9px 20px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
+          <button onClick={onClose} style={{ padding: "9px 20px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13, color: "#fff" }}>Cancelar</button>
           <button onClick={guardar} disabled={loading} style={{ padding: "9px 24px", background: "#0F766E", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>{loading ? "Guardando..." : "Guardar gasto"}</button>
         </div>
       </div>
@@ -350,7 +350,7 @@ function Dashboard({ setSeccion, onNuevaCompra, onNuevoGasto, onVerStockBajo }) 
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", flexWrap: "wrap" }}>
         <button onClick={onNuevaCompra} style={{ padding: "8px 16px", background: "var(--color-background-secondary)", border: "1px solid var(--color-border-secondary)", borderRadius: 9, cursor: "pointer", fontSize: 13, color: "#fff" }}>🚚 Nueva compra</button>
         <button onClick={onNuevoGasto} style={{ padding: "8px 16px", background: "#0F766E", color: "#fff", border: "none", borderRadius: 9, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>+ Gasto</button>
-        <button onClick={cargar} style={{ padding: "8px 12px", background: "var(--color-background-tertiary)", border: "1px solid var(--color-border-secondary)", borderRadius: 9, cursor: "pointer", fontSize: 13 }}>↻ Actualizar</button>
+        <button onClick={cargar} style={{ padding: "8px 12px", background: "var(--color-background-tertiary)", border: "1px solid var(--color-border-secondary)", borderRadius: 9, cursor: "pointer", fontSize: 13, color: "#fff" }}>↻ Actualizar</button>
       </div>
 
       {/* ── KPIs ─────────────────────────────────────────────────────────── */}
@@ -606,7 +606,7 @@ function Ordenes() {
             {l}
           </button>
         ))}
-        <button onClick={cargar} style={{ marginLeft: "auto", padding: "6px 14px", border: "1px solid var(--color-border-secondary)", borderRadius: 20, background: "var(--color-background-secondary)", fontSize: 12, cursor: "pointer" }}>↻</button>
+        <button onClick={cargar} style={{ marginLeft: "auto", padding: "6px 14px", border: "1px solid var(--color-border-secondary)", borderRadius: 20, background: "var(--color-background-secondary)", fontSize: 12, cursor: "pointer", color: "#fff" }}>↻</button>
       </div>
       {loading ? <div style={{ textAlign: "center", padding: 40, color: "var(--color-text-secondary)" }}>Cargando...</div> :
         ordenes.length === 0
@@ -786,7 +786,7 @@ function ModalNuevoLote({ productos, onClose, onSaved }) {
         <LineasClasificacion items={items} setItems={setItems} productos={productos} />
 
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-          <button onClick={onClose} style={{ padding: "9px 20px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
+          <button onClick={onClose} style={{ padding: "9px 20px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13, color: "#fff" }}>Cancelar</button>
           <button onClick={guardar} disabled={loading} style={{ padding: "9px 24px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>{loading ? "Guardando..." : "Guardar lote"}</button>
         </div>
       </div>
@@ -822,7 +822,7 @@ function ModalClasificarLote({ lote, productos, onClose, onSaved }) {
         {error && <div style={{ background: "#FEE2E2", color: "#B91C1C", borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 12 }}>{error}</div>}
         <LineasClasificacion items={items} setItems={setItems} productos={productos} />
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-          <button onClick={onClose} style={{ padding: "9px 20px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
+          <button onClick={onClose} style={{ padding: "9px 20px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13, color: "#fff" }}>Cancelar</button>
           <button onClick={guardar} disabled={loading} style={{ padding: "9px 24px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>{loading ? "Guardando..." : "Agregar clasificación"}</button>
         </div>
       </div>
@@ -936,7 +936,7 @@ function ModalNuevaDevolucion({ lotes, onClose, onSaved }) {
         <div style={{ marginBottom: 16 }}><label style={labelStyle}>Fecha de devolución</label><input type="date" style={inputStyle} value={fecha} onChange={e => setFecha(e.target.value)} /></div>
 
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-          <button onClick={onClose} style={{ padding: "9px 20px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
+          <button onClick={onClose} style={{ padding: "9px 20px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13, color: "#fff" }}>Cancelar</button>
           <button onClick={guardar} disabled={loading} style={{ padding: "9px 24px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>{loading ? "Guardando..." : "Registrar devolución"}</button>
         </div>
       </div>
@@ -981,7 +981,7 @@ function MovimientosInventario() {
             <option value="ajuste">Ajustes</option>
           </select>
         </div>
-        <button onClick={cargar} style={{ padding: "8px 16px", background: "none", border: "1px solid var(--color-border-secondary)", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>↻ Actualizar</button>
+        <button onClick={cargar} style={{ padding: "8px 16px", background: "none", border: "1px solid var(--color-border-secondary)", borderRadius: 8, cursor: "pointer", fontSize: 13, color: "#fff" }}>↻ Actualizar</button>
       </div>
       {loading ? <div style={{ textAlign: "center", padding: 40, color: "var(--color-text-secondary)" }}>Cargando...</div> : (
         <div style={{ background: "var(--color-background-secondary)", borderRadius: 12, border: "1px solid var(--color-border-tertiary)", overflowX: "auto" }}>
@@ -1248,7 +1248,7 @@ function CortesCaja() {
           <h3 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700 }}>Abrir caja</h3>
           <div style={{ marginBottom: 16 }}><label style={labelStyle}>Fondo inicial en efectivo (dinero que hay en caja al inicio)</label><input type="number" min={0} style={inputStyle} placeholder="$0.00" value={montoInicial} onChange={e => setMontoInicial(e.target.value)} /></div>
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-            <button onClick={() => { setVista("principal"); setError(""); }} style={{ padding: "9px 18px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
+            <button onClick={() => { setVista("principal"); setError(""); }} style={{ padding: "9px 18px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13, color: "#fff" }}>Cancelar</button>
             <button onClick={abrir} disabled={procesando} style={{ padding: "9px 24px", background: "#059669", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>{procesando ? "Abriendo..." : "Abrir caja"}</button>
           </div>
         </div>
@@ -1261,7 +1261,7 @@ function CortesCaja() {
           <div style={{ marginBottom: 12 }}><label style={labelStyle}>Efectivo contado físicamente en caja *</label><input type="number" min={0} style={inputStyle} placeholder="$0.00" value={montoCierre} onChange={e => setMontoCierre(e.target.value)} autoFocus /></div>
           <div style={{ marginBottom: 16 }}><label style={labelStyle}>Notas (opcional)</label><input style={inputStyle} placeholder="Observaciones del cierre..." value={notasCierre} onChange={e => setNotasCierre(e.target.value)} /></div>
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-            <button onClick={() => { setVista("principal"); setError(""); }} style={{ padding: "9px 18px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
+            <button onClick={() => { setVista("principal"); setError(""); }} style={{ padding: "9px 18px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13, color: "#fff" }}>Cancelar</button>
             <button onClick={cerrar} disabled={procesando} style={{ padding: "9px 24px", background: "#B91C1C", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>{procesando ? "Cerrando..." : "Cerrar caja"}</button>
           </div>
         </div>
@@ -1528,7 +1528,7 @@ function CreditoVentas() {
               <div><label style={labelStyle}>Notas</label><input style={inputStyle} value={form.notas} onChange={e => setForm(p => ({ ...p, notas: e.target.value }))} /></div>
             </div>
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 20 }}>
-              <button onClick={() => setModal(null)} style={{ padding: "9px 18px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
+              <button onClick={() => setModal(null)} style={{ padding: "9px 18px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13, color: "#fff" }}>Cancelar</button>
               <button onClick={crearCuenta} disabled={procesando} style={{ padding: "9px 24px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>{procesando ? "Guardando..." : "Crear cuenta"}</button>
             </div>
           </div>
@@ -1550,7 +1550,7 @@ function CreditoVentas() {
               <div><label style={labelStyle}>Notas</label><input style={inputStyle} value={formPago.notas} onChange={e => setFormPago(p => ({ ...p, notas: e.target.value }))} /></div>
             </div>
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 20 }}>
-              <button onClick={() => setModal(null)} style={{ padding: "9px 18px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
+              <button onClick={() => setModal(null)} style={{ padding: "9px 18px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13, color: "#fff" }}>Cancelar</button>
               <button onClick={registrarPago} disabled={procesando} style={{ padding: "9px 24px", background: "#059669", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>{procesando ? "Guardando..." : "Registrar pago"}</button>
             </div>
           </div>
@@ -1695,7 +1695,7 @@ function ModalCliente({ onClose, onSaved }) {
           <input style={inputStyle} placeholder="Dirección (opcional)" value={form.direccion} onChange={e => setForm({ ...form, direccion: e.target.value })} />
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
-          <button type="button" onClick={onClose} style={{ flex: 1, padding: "9px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
+          <button type="button" onClick={onClose} style={{ flex: 1, padding: "9px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13, color: "#fff" }}>Cancelar</button>
           <button type="submit" disabled={loading} style={{ flex: 1, padding: "9px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>{loading ? "Guardando..." : "Crear cliente"}</button>
         </div>
       </form>
@@ -2170,7 +2170,7 @@ function ModalUsuario({ roles, onClose, onSaved }) {
           </select>
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
-          <button type="button" onClick={onClose} style={{ flex: 1, padding: "9px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
+          <button type="button" onClick={onClose} style={{ flex: 1, padding: "9px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13, color: "#fff" }}>Cancelar</button>
           <button type="submit" disabled={loading} style={{ flex: 1, padding: "9px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>{loading ? "Creando..." : "Crear usuario"}</button>
         </div>
       </form>
@@ -2207,7 +2207,7 @@ function ModalResetPassword({ usuario, onClose, onSaved }) {
             {error && <div style={{ background: "#FEE2E2", color: "#B91C1C", borderRadius: 8, padding: "8px 12px", fontSize: 12, marginBottom: 12 }}>{error}</div>}
             <input style={inputStyle} type="password" placeholder="Nueva contraseña (mínimo 6 caracteres)" required minLength={6} value={password} onChange={e => setPassword(e.target.value)} autoFocus />
             <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-              <button type="button" onClick={onClose} style={{ flex: 1, padding: "9px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
+              <button type="button" onClick={onClose} style={{ flex: 1, padding: "9px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13, color: "#fff" }}>Cancelar</button>
               <button type="submit" disabled={loading} style={{ flex: 1, padding: "9px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>{loading ? "Guardando..." : "Restablecer"}</button>
             </div>
           </form>
@@ -2251,7 +2251,7 @@ function ModalMiPassword({ onClose }) {
               <input style={inputStyle} type="password" placeholder="Nueva contraseña (mínimo 6 caracteres)" required minLength={6} value={nueva} onChange={e => setNueva(e.target.value)} />
             </div>
             <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-              <button type="button" onClick={onClose} style={{ flex: 1, padding: "9px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
+              <button type="button" onClick={onClose} style={{ flex: 1, padding: "9px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13, color: "#fff" }}>Cancelar</button>
               <button type="submit" disabled={loading} style={{ flex: 1, padding: "9px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>{loading ? "Guardando..." : "Cambiar"}</button>
             </div>
           </form>
@@ -2520,6 +2520,133 @@ function Ventas() {
 
 
 // ─── Historial de ventas del día (o del rango que elijas) ─────────────────────
+// ─── Modal previsualización de ticket de venta ───────────────────────────────
+function ModalTicket({ ventaId, onClose }) {
+  const [venta, setVenta]     = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState("");
+
+  useEffect(() => {
+    api.ventaDetalle(ventaId)
+      .then(setVenta)
+      .catch(e => setError(e.message || "No se pudo cargar el ticket"))
+      .finally(() => setLoading(false));
+  }, [ventaId]);
+
+  const imprimir = () => {
+    if (!venta) return;
+    const fmtH = ts => new Date(ts).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+    const fmtD = ts => new Date(ts).toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" });
+    const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+<title>Ticket ${venta.folio}</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:12px;max-width:320px;margin:0 auto;padding:16px}
+  .center{text-align:center}.sep{border:none;border-top:1px dashed #888;margin:8px 0}
+  h1{font-size:14px;font-weight:700;text-align:center;margin:4px 0}.sub{font-size:10px;color:#555;text-align:center}
+  table{width:100%;border-collapse:collapse;font-size:11px}td{padding:3px 0;vertical-align:top}td.r{text-align:right;white-space:nowrap}
+  .total-row{font-weight:700;font-size:13px;border-top:1px solid #111;padding-top:4px}
+  .footer{font-size:10px;color:#777;text-align:center;margin-top:12px}
+  button{display:block;margin:12px auto 0;padding:8px 24px;background:#111;color:#fff;border:none;border-radius:4px;cursor:pointer}
+  @media print{button{display:none!important}}
+</style></head><body>
+<div class="center">
+  ${venta.logo_url ? `<img src="${venta.logo_url}" style="width:56px;height:56px;border-radius:8px;object-fit:cover;margin-bottom:6px">` : ""}
+  <h1>${venta.negocio_nombre || "Ticket de venta"}</h1>
+  ${venta.negocio_direccion ? `<div class="sub">${venta.negocio_direccion}</div>` : ""}
+</div>
+<hr class="sep">
+<div style="font-size:11px">
+  <div><b>Folio:</b> ${venta.folio}</div>
+  <div><b>Fecha:</b> ${fmtD(venta.fecha_local || venta.fecha)}</div>
+  <div><b>Hora:</b> ${fmtH(venta.fecha_local || venta.fecha)}</div>
+  <div><b>Cliente:</b> ${venta.cliente_nombre || "Cliente general"}</div>
+  <div><b>Cajero:</b> ${venta.cajero_nombre || "—"}</div>
+  <div><b>Pago:</b> <span style="text-transform:capitalize">${venta.metodo_pago}</span></div>
+</div>
+<hr class="sep">
+<table>
+  <thead><tr><td><b>Producto</b></td><td class="r"><b>Cant</b></td><td class="r"><b>P.U.</b></td><td class="r"><b>Importe</b></td></tr></thead>
+  <tbody>${(venta.items||[]).map(i=>`<tr>
+    <td>${i.producto_nombre}${i.producto_medida?`<br><span style="font-size:10px;color:#555">${i.producto_medida}</span>`:""}</td>
+    <td class="r">${parseFloat(i.cantidad)}</td>
+    <td class="r">$${parseFloat(i.precio_unitario).toFixed(2)}</td>
+    <td class="r">$${parseFloat(i.subtotal).toFixed(2)}</td>
+  </tr>`).join("")}</tbody>
+</table>
+<hr class="sep">
+<table>
+  ${parseFloat(venta.descuento||0)>0?`<tr><td>Descuento</td><td class="r">-$${parseFloat(venta.descuento).toFixed(2)}</td></tr>`:""}
+  ${parseFloat(venta.iva||0)>0?`<tr><td>IVA 16%</td><td class="r">$${parseFloat(venta.iva).toFixed(2)}</td></tr>`:""}
+  <tr class="total-row"><td>TOTAL</td><td class="r">$${parseFloat(venta.total).toFixed(2)}</td></tr>
+  ${parseFloat(venta.cambio||0)>0?`<tr><td style="color:#059669">Cambio</td><td class="r" style="color:#059669">$${parseFloat(venta.cambio).toFixed(2)}</td></tr>`:""}
+</table>
+${venta.notas?`<hr class="sep"><div style="font-size:10px;color:#555">Nota: ${venta.notas}</div>`:""}
+<div class="footer">¡Gracias por su compra!</div>
+<button onclick="window.print()">🖨 Imprimir ticket</button>
+</body></html>`;
+    const w = window.open("","_blank","width=380,height=700");
+    w.document.write(html); w.document.close(); w.focus();
+  };
+
+  return (
+    <div style={overlayStyle}>
+      <div style={{ ...modalBase, maxWidth: 540 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>🧾 {venta ? venta.folio : "Cargando..."}</h2>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)" }}>✕</button>
+        </div>
+        {loading && <div style={{ textAlign: "center", padding: 40, color: "var(--color-text-secondary)" }}>Cargando...</div>}
+        {error && <div style={{ background: "#FEE2E2", color: "#B91C1C", borderRadius: 8, padding: "10px 14px", fontSize: 13 }}>{error}</div>}
+        {venta && (
+          <>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14, fontSize: 13 }}>
+              <div style={{ background: "var(--color-background-secondary)", borderRadius: 8, padding: "10px 14px" }}>
+                <div style={{ fontSize: 10, color: "var(--color-text-secondary)", textTransform: "uppercase", marginBottom: 2 }}>Fecha / Hora</div>
+                <div style={{ fontWeight: 600 }}>{new Date(venta.fecha_local||venta.fecha).toLocaleDateString("es-MX",{day:"2-digit",month:"short",year:"numeric"})}</div>
+                <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>{new Date(venta.fecha_local||venta.fecha).toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"})}</div>
+              </div>
+              <div style={{ background: "var(--color-background-secondary)", borderRadius: 8, padding: "10px 14px" }}>
+                <div style={{ fontSize: 10, color: "var(--color-text-secondary)", textTransform: "uppercase", marginBottom: 2 }}>Cliente / Cajero</div>
+                <div style={{ fontWeight: 600 }}>{venta.cliente_nombre || "Cliente general"}</div>
+                <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>{venta.cajero_nombre}</div>
+              </div>
+            </div>
+            <div style={{ background: "var(--color-background-secondary)", borderRadius: 10, border: "1px solid var(--color-border-tertiary)", marginBottom: 12, overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <thead><tr style={{ background: "var(--color-background-tertiary)" }}>
+                  {["Producto","Cant.","P.U.","Importe"].map((h,i)=>
+                    <th key={h} style={{ padding:"8px 10px",textAlign:i>1?"right":"left",fontSize:10,fontWeight:600,color:"var(--color-text-secondary)",textTransform:"uppercase" }}>{h}</th>)}
+                </tr></thead>
+                <tbody>
+                  {(venta.items||[]).map((item,i)=>(
+                    <tr key={i} style={{ borderTop:"1px solid var(--color-border-tertiary)" }}>
+                      <td style={{ padding:"8px 10px" }}><div style={{ fontWeight:600,fontSize:12 }}>{item.producto_nombre}</div>{item.producto_medida&&<div style={{ fontSize:10,color:"var(--color-text-secondary)" }}>{item.producto_medida}</div>}</td>
+                      <td style={{ padding:"8px 10px",textAlign:"right" }}>{parseFloat(item.cantidad)}</td>
+                      <td style={{ padding:"8px 10px",textAlign:"right",color:"var(--color-text-secondary)" }}>{fmt(item.precio_unitario)}</td>
+                      <td style={{ padding:"8px 10px",textAlign:"right",fontWeight:600 }}>{fmt(item.subtotal)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ background:"var(--color-background-tertiary)",borderRadius:8,padding:"10px 14px",marginBottom:12 }}>
+              {parseFloat(venta.descuento||0)>0&&<div style={{ display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4 }}><span style={{ color:"var(--color-text-secondary)" }}>Descuento</span><span style={{ color:"#059669" }}>-{fmt(venta.descuento)}</span></div>}
+              {parseFloat(venta.iva||0)>0&&<div style={{ display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4 }}><span style={{ color:"var(--color-text-secondary)" }}>IVA 16%</span><span>{fmt(venta.iva)}</span></div>}
+              <div style={{ display:"flex",justifyContent:"space-between",fontWeight:800,fontSize:18 }}><span>Total</span><span style={{ color:"#60A5FA" }}>{fmt(venta.total)}</span></div>
+              {parseFloat(venta.cambio||0)>0&&<div style={{ display:"flex",justifyContent:"space-between",fontSize:13,marginTop:4 }}><span style={{ color:"#059669" }}>Cambio</span><span style={{ color:"#059669",fontWeight:600 }}>{fmt(venta.cambio)}</span></div>}
+            </div>
+            {venta.notas&&<div style={{ fontSize:12,color:"var(--color-text-secondary)",background:"var(--color-background-secondary)",borderRadius:6,padding:"8px 12px",marginBottom:12 }}>📝 {venta.notas}</div>}
+            <div style={{ display:"flex",gap:10,justifyContent:"flex-end" }}>
+              <button onClick={onClose} style={{ padding:"9px 18px",border:"1px solid var(--color-border-secondary)",borderRadius:8,background:"none",cursor:"pointer",fontSize:13,color:"#fff" }}>Cerrar</button>
+              <button onClick={imprimir} style={{ padding:"9px 20px",background:"#111",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:600 }}>🖨 Imprimir</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const ESTADO_VENTA_INFO = {
   pagada: { label: "Pagada", bg: "#D1FAE5", color: "#065F46" },
   pendiente: { label: "Pendiente", bg: "#FEF3C7", color: "#92400E" },
@@ -2527,10 +2654,12 @@ const ESTADO_VENTA_INFO = {
 };
 
 function HistorialVentas() {
-  const [desde, setDesde] = useState(hoyISO());
-  const [hasta, setHasta] = useState(hoyISO());
-  const [ventas, setVentas] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [desde, setDesde]       = useState(hoyISO());
+  const [hasta, setHasta]       = useState(hoyISO());
+  const [ventas, setVentas]     = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [editandoId, setEditandoId] = useState(null); // id de venta cuyo método se está editando
+  const [ticketId, setTicketId] = useState(null);
 
   const cargar = useCallback(() => {
     setLoading(true);
@@ -2541,10 +2670,21 @@ function HistorialVentas() {
 
   useEffect(() => { cargar(); }, [cargar]);
 
+  const cambiarMetodo = async (ventaId, nuevoMetodo) => {
+    try {
+      await api.actualizarMetodoPago(ventaId, nuevoMetodo);
+      setVentas(prev => prev.map(v => v.id === ventaId ? { ...v, metodo_pago: nuevoMetodo } : v));
+    } catch (e) {
+      alert('Error al cambiar método de pago: ' + e.message);
+    } finally {
+      setEditandoId(null);
+    }
+  };
+
   const totales = ventas.reduce((acc, v) => {
     if (v.estado === "pagada") {
-      acc.total += parseFloat(v.total);
-      acc.pagadas += 1;
+      acc.total    += parseFloat(v.total);
+      acc.pagadas  += 1;
       acc[v.metodo_pago] = (acc[v.metodo_pago] || 0) + parseFloat(v.total);
     }
     return acc;
@@ -2557,43 +2697,34 @@ function HistorialVentas() {
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 16 }}>
         <div><label style={labelStyle}>Del</label><input type="date" style={{ ...inputStyle, width: 160 }} value={desde} onChange={e => setDesde(e.target.value)} /></div>
         <div><label style={labelStyle}>Al</label><input type="date" style={{ ...inputStyle, width: 160 }} value={hasta} onChange={e => setHasta(e.target.value)} /></div>
-        <button onClick={() => { setDesde(hoyISO()); setHasta(hoyISO()); }} style={{ padding: "8px 16px", background: esHoy ? "#1D4ED8" : "var(--color-background-tertiary)", color: esHoy ? "#fff" : "var(--color-text-primary)", border: "1px solid var(--color-border-secondary)", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>Hoy</button>
-        <button onClick={cargar} style={{ padding: "8px 16px", background: "none", border: "1px solid var(--color-border-secondary)", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>↻ Actualizar</button>
+        <button onClick={() => { setDesde(hoyISO()); setHasta(hoyISO()); }} style={{ padding: "8px 16px", background: esHoy ? "#1D4ED8" : "var(--color-background-tertiary)", color: "#fff", border: "1px solid var(--color-border-secondary)", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>Hoy</button>
+        <button onClick={cargar} style={{ padding: "8px 16px", background: "none", border: "1px solid var(--color-border-secondary)", borderRadius: 8, cursor: "pointer", fontSize: 13, color: "#fff" }}>↻ Actualizar</button>
       </div>
 
       <div style={{ display: "flex", gap: 16, marginBottom: 16, flexWrap: "wrap" }}>
-        <div style={{ background: "var(--color-background-secondary)", borderRadius: 10, padding: "12px 18px", border: "1px solid var(--color-border-tertiary)" }}>
-          <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Ventas pagadas</div>
-          <div style={{ fontSize: 18, fontWeight: 700 }}>{totales.pagadas}</div>
-        </div>
-        <div style={{ background: "var(--color-background-secondary)", borderRadius: 10, padding: "12px 18px", border: "1px solid var(--color-border-tertiary)" }}>
-          <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Total cobrado</div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "#1D4ED8" }}>{fmt(totales.total)}</div>
-        </div>
-        <div style={{ background: "var(--color-background-secondary)", borderRadius: 10, padding: "12px 18px", border: "1px solid var(--color-border-tertiary)" }}>
-          <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Efectivo</div>
-          <div style={{ fontSize: 18, fontWeight: 700 }}>{fmt(totales.efectivo || 0)}</div>
-        </div>
-        <div style={{ background: "var(--color-background-secondary)", borderRadius: 10, padding: "12px 18px", border: "1px solid var(--color-border-tertiary)" }}>
-          <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Tarjeta</div>
-          <div style={{ fontSize: 18, fontWeight: 700 }}>{fmt(totales.tarjeta || 0)}</div>
-        </div>
-        <div style={{ background: "var(--color-background-secondary)", borderRadius: 10, padding: "12px 18px", border: "1px solid var(--color-border-tertiary)" }}>
-          <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Transferencia</div>
-          <div style={{ fontSize: 18, fontWeight: 700 }}>{fmt(totales.transferencia || 0)}</div>
-        </div>
+        {[["Ventas pagadas", totales.pagadas, "#fff", v => v],
+          ["Total cobrado", totales.total, "#60A5FA", fmt],
+          ["Efectivo", totales.efectivo || 0, "#fff", fmt],
+          ["Tarjeta", totales.tarjeta || 0, "#fff", fmt],
+          ["Transferencia", totales.transferencia || 0, "#fff", fmt],
+        ].map(([label, val, color, f]) => (
+          <div key={label} style={{ background: "var(--color-background-secondary)", borderRadius: 10, padding: "12px 18px", border: "1px solid var(--color-border-tertiary)" }}>
+            <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>{label}</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color }}>{f(val)}</div>
+          </div>
+        ))}
       </div>
 
       {loading ? <div style={{ textAlign: "center", padding: 40, color: "var(--color-text-secondary)" }}>Cargando...</div> : (
         <div style={{ background: "var(--color-background-secondary)", borderRadius: 12, border: "1px solid var(--color-border-tertiary)", overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead><tr style={{ background: "var(--color-background-tertiary)" }}>
-              {["Folio", "Hora", "Cliente", "Cajero", "Método de pago", "Notas", "Total", "Estado"].map(h =>
-                <th key={h} style={{ padding: "10px 14px", textAlign: (h === "Total") ? "right" : "left", fontWeight: 600, fontSize: 11, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{h}</th>)}
+              {["Folio","Hora","Cliente","Cajero","Método de pago","Notas","Total","Estado",""].map(h =>
+                <th key={h} style={{ padding: "10px 14px", textAlign: h==="Total"?"right":"left", fontWeight: 600, fontSize: 11, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{h}</th>)}
             </tr></thead>
             <tbody>
               {ventas.length === 0
-                ? <tr><td colSpan={8} style={{ padding: 40, textAlign: "center", color: "var(--color-text-secondary)" }}>No hay ventas en este rango de fechas.</td></tr>
+                ? <tr><td colSpan={9} style={{ padding: 40, textAlign: "center", color: "var(--color-text-secondary)" }}>No hay ventas en este rango de fechas.</td></tr>
                 : ventas.map(v => {
                   const estadoInfo = ESTADO_VENTA_INFO[v.estado] || ESTADO_VENTA_INFO.pagada;
                   return (
@@ -2602,10 +2733,32 @@ function HistorialVentas() {
                       <td style={{ padding: "10px 14px", color: "var(--color-text-secondary)" }}>{new Date(v.fecha).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}</td>
                       <td style={{ padding: "10px 14px" }}>{v.cliente_nombre || "Cliente general"}</td>
                       <td style={{ padding: "10px 14px", color: "var(--color-text-secondary)" }}>{v.cajero_nombre || "—"}</td>
-                      <td style={{ padding: "10px 14px", textTransform: "capitalize" }}>{v.metodo_pago}</td>
-                      <td style={{ padding: "10px 14px", color: "var(--color-text-secondary)", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.notas || "—"}</td>
-                      <td style={{ padding: "10px 14px", textAlign: "right", fontWeight: 700, color: "#1D4ED8" }}>{fmt(v.total)}</td>
+                      <td style={{ padding: "8px 14px" }}>
+                        {editandoId === v.id ? (
+                          <select autoFocus defaultValue={v.metodo_pago}
+                            onChange={e => cambiarMetodo(v.id, e.target.value)}
+                            onBlur={() => setEditandoId(null)}
+                            style={{ ...inputStyle, padding: "4px 8px", width: "auto", fontSize: 12 }}>
+                            <option value="efectivo">Efectivo</option>
+                            <option value="tarjeta">Tarjeta</option>
+                            <option value="transferencia">Transferencia</option>
+                          </select>
+                        ) : (
+                          <span onClick={() => v.estado === "pagada" && setEditandoId(v.id)}
+                            title={v.estado === "pagada" ? "Clic para cambiar" : ""}
+                            style={{ textTransform: "capitalize", cursor: v.estado === "pagada" ? "pointer" : "default",
+                              padding: "3px 8px", borderRadius: 6,
+                              border: v.estado === "pagada" ? "1px dashed var(--color-border-secondary)" : "none" }}>
+                            {v.metodo_pago} {v.estado === "pagada" ? "✎" : ""}
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ padding: "10px 14px", color: "var(--color-text-secondary)", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.notas || "—"}</td>
+                      <td style={{ padding: "10px 14px", textAlign: "right", fontWeight: 700, color: "#60A5FA" }}>{fmt(v.total)}</td>
                       <td style={{ padding: "10px 14px" }}><span style={{ background: estadoInfo.bg, color: estadoInfo.color, fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20 }}>{estadoInfo.label}</span></td>
+                      <td style={{ padding: "8px 14px" }}>
+                        <button onClick={() => setTicketId(v.id)} style={{ padding: "5px 10px", background: "var(--color-background-tertiary)", border: "1px solid var(--color-border-secondary)", borderRadius: 6, cursor: "pointer", fontSize: 11, color: "#fff", whiteSpace: "nowrap" }}>🧾 Ver</button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -2613,6 +2766,8 @@ function HistorialVentas() {
           </table>
         </div>
       )}
+
+      {ticketId && <ModalTicket ventaId={ticketId} onClose={() => setTicketId(null)} />}
     </div>
   );
 }

@@ -4,13 +4,13 @@ import { loginLimiter } from '../middleware/security.js';
 import { login, me, cambiarPassword } from '../controllers/auth.controller.js';
 import * as clientes    from '../controllers/clientes.controller.js';
 import * as productos   from '../controllers/productos.controller.js';
-import { importar as importarProductos } from '../controllers/importar.controller.js';
 import { uploadFoto }   from '../middleware/upload.js';
 import * as compras     from '../controllers/compras.controller.js';
 import * as gastos      from '../controllers/gastos.controller.js';
 import * as ventas      from '../controllers/ventas.controller.js';
 import * as ordenes     from '../controllers/ordenes.controller.js';
-import * as reportes    from '../controllers/reportes.controller.js';import * as cotizaciones from '../controllers/cotizaciones.controller.js';
+import * as reportes    from '../controllers/reportes.controller.js';
+import * as cotizaciones from '../controllers/cotizaciones.controller.js';
 import * as usuarios    from '../controllers/usuarios.controller.js';
 import * as negocio     from '../controllers/negocio.controller.js';
 import * as lotes       from '../controllers/lotes.controller.js';
@@ -37,7 +37,6 @@ r.post('/clientes/:id/vehiculos',         authenticate, clientes.crearVehiculo);
 r.get ('/productos',                      authenticate, productos.listar);
 r.get ('/productos/:id',                  authenticate, productos.obtener);
 r.post('/productos',                      authenticate, productos.crear);
-r.post('/productos/importar',             authenticate, importarProductos);
 r.put ('/productos/:id',                  authenticate, productos.actualizar);
 r.post('/productos/:id/stock',            authenticate, productos.ajustarStock);
 r.post('/productos/:id/fotos',            authenticate, productos.agregarFoto);
@@ -66,6 +65,7 @@ r.get ('/ventas',                         authenticate, ventas.listar);
 r.get ('/ventas/resumen',                 authenticate, ventas.resumenDia);
 r.get ('/ventas/:id',                     authenticate, ventas.obtener);
 r.post('/ventas',                         authenticate, ventas.crear);
+r.patch('/ventas/:id/metodo-pago',        authenticate, ventas.actualizarMetodoPago);
 
 // ── Órdenes de servicio ───────────────────────────────────────────────────────
 r.get ('/ordenes',                        authenticate, ordenes.listar);
@@ -80,8 +80,6 @@ r.get ('/reportes/utilidad',              authenticate, reportes.utilidadBruta);
 r.get ('/reportes/producto-mas-vendido',  authenticate, reportes.productoMasVendido);
 r.get ('/reportes/cotizaciones-vendedor', authenticate, reportes.cotizacionesPorVendedor);
 r.get ('/reportes/llantas-mes',           authenticate, reportes.llantasPorMes);
-r.get ('/reportes/inventario',            authenticate, reportes.inventarioActual);
-r.get ('/reportes/producto/:producto_id/ventas', authenticate, reportes.ventasPorProducto);
 
 // ── Cotizaciones ──────────────────────────────────────────────────────────────
 r.get ('/cotizaciones',                   authenticate, cotizaciones.listar);

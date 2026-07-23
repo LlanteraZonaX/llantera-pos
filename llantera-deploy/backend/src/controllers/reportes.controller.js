@@ -144,7 +144,10 @@ export const ventasPorPeriodo = async (req, res) => {
   try {
     const { desde, hasta, agrupacion = 'dia' } = req.query;
     const negocio_id = req.user.negocio_id;
-    const formato = agrupacion === 'mes' ? 'YYYY-MM' : agrupacion === 'semana' ? 'IYYY-IW' : 'YYYY-MM-DD';
+    // 'semana' ahora muestra cada día individual (YYYY-MM-DD) igual que 'dia'
+    // para que al filtrar por una semana aparezca cada día como fila separada.
+    // 'mes' sigue agrupando por mes (YYYY-MM).
+    const formato = agrupacion === 'mes' ? 'YYYY-MM' : 'YYYY-MM-DD';
     // Default: últimos 30 días, calculado en JS (antes se mandaba el texto
     // 'NOW() - INTERVAL...' como parámetro literal, lo cual rompía la consulta).
     const hastaVal = hasta || new Date().toISOString().slice(0, 10);

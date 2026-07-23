@@ -40,18 +40,18 @@ export const api = {
     fetch(`${BASE}/productos?${params}`, { headers: headers() }).then(handle),
   crearProducto: (data) =>
     fetch(`${BASE}/productos`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle),
-  importarProductos: (productos) =>
-    fetch(`${BASE}/productos/importar`, { method: 'POST', headers: headers(), body: JSON.stringify({ productos }) }).then(handle),
   actualizarProducto: (id, data) =>
     fetch(`${BASE}/productos/${id}`, { method: 'PUT', headers: headers(), body: JSON.stringify(data) }).then(handle),
 
   // Ventas
   ventas: (params = '') =>
     fetch(`${BASE}/ventas?${params}`, { headers: headers() }).then(handle),
-  ventaDetalle: (id) =>
-    fetch(`${BASE}/ventas/${id}`, { headers: headers() }).then(handle),
   crearVenta: (data) =>
     fetch(`${BASE}/ventas`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle),
+  ventaDetalle: (id) =>
+    fetch(`${BASE}/ventas/${id}`, { headers: headers() }).then(handle),
+  actualizarMetodoPago: (id, metodo_pago) =>
+    fetch(`${BASE}/ventas/${id}/metodo-pago`, { method: 'PATCH', headers: headers(), body: JSON.stringify({ metodo_pago }) }).then(handle),
 
   // Compras
   compras: (params = '') =>
@@ -181,10 +181,6 @@ export const api = {
   // Reportes
   reporteVentas: (params = '') =>
     fetch(`${BASE}/reportes/ventas?${params}`, { headers: headers() }).then(handle),
-  reporteInventario: () =>
-    fetch(`${BASE}/reportes/inventario`, { headers: headers() }).then(handle),
-  ventasPorProducto: (producto_id) =>
-    fetch(`${BASE}/reportes/producto/${producto_id}/ventas`, { headers: headers() }).then(handle),
   reporteProductoMasVendido: (params = '') =>
     fetch(`${BASE}/reportes/producto-mas-vendido?${params}`, { headers: headers() }).then(handle),
   reporteCotizacionesVendedor: (params = '') =>
