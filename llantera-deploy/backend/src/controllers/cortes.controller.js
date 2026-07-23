@@ -1,17 +1,6 @@
-/**
- * cortes.controller.js — Cortes de caja
- *
- * CRITERIO DE CONTEO DE VENTAS EN UN TURNO:
- * Se usa created_at (cuándo se capturó físicamente) en lugar de fecha
- * (la fecha contable asignada). Esto es correcto porque:
- * - El corte de caja mide lo que el cajero capturó DURANTE su turno.
- * - Si ingresas hoy ventas con fecha de ayer (backdating), su created_at
- *   es HOY → pertenecen al turno de hoy y se cuentan correctamente.
- * - El historial de ventas sí usa `fecha` para reportes contables.
- */
 import { query, getClient } from '../config/db.js';
 
-// ── Corte actualmente abierto ─────────────────────────────────────────────────
+// Corte actualmente abierto
 export const actual = async (req, res) => {
   try {
     const { rows: [corte] } = await query(
@@ -29,7 +18,7 @@ export const actual = async (req, res) => {
   }
 };
 
-// ── Abrir caja ────────────────────────────────────────────────────────────────
+// Abrir caja
 export const abrir = async (req, res) => {
   try {
     const negocio_id = req.user.negocio_id;
@@ -53,7 +42,8 @@ export const abrir = async (req, res) => {
   }
 };
 
-// ── Cerrar caja ───────────────────────────────────────────────────────────────
+// Cerrar caja
+// monto_esperado = fondo_inicial + ventas_efectivo - gastos_efectivo_del_turno
 export const cerrar = async (req, res) => {
   const client = await getClient();
   try {
@@ -65,20 +55,18 @@ export const cerrar = async (req, res) => {
       throw new Error('Debes ingresar el monto que contaste en caja');
 
     const { rows: [corte] } = await client.query(
-      `SELECT * FROM cortes_caja WHERE negocio_id = $1 AND estado = 'abierto'
+      `SELECT * FROM cortes_caja
+       WHERE negocio_id = $1 AND estado = 'abierto'
        ORDER BY fecha_apertura DESC LIMIT 1 FOR UPDATE`,
       [negocio_id]
     );
     if (!corte) throw new Error('No hay caja abierta que cerrar');
 
-    // Ventas capturadas DURANTE este turno.
-    // Usamos created_at (momento real de captura) — NO fecha (fecha contable).
-    // Ejemplo: si hoy registras ventas con fecha de ayer, su created_at = HOY,
-    // por lo tanto pertenecen a este turno y se cuentan correctamente.
+    // Ventas capturadas durante el turno (created_at para incluir ventas atrasadas ingresadas hoy)
     const { rows: [tots] } = await client.query(
       `SELECT
-         COALESCE(SUM(total) FILTER (WHERE estado = 'pagada'), 0)                              as total_ventas,
-         COALESCE(SUM(total) FILTER (WHERE estado = 'pagada' AND metodo_pago = 'efectivo'), 0) as total_efectivo
+         COALESCE(SUM(total) FILTER (WHERE estado = 'pagada'), 0)                              AS total_ventas,
+         COALESCE(SUM(total) FILTER (WHERE estado = 'pagada' AND metodo_pago = 'efectivo'), 0) AS total_efectivo
        FROM ventas
        WHERE negocio_id = $1
          AND created_at >= $2
@@ -86,9 +74,29 @@ export const cerrar = async (req, res) => {
       [negocio_id, corte.fecha_apertura]
     );
 
-    const montoFinal     = parseFloat(monto_final_contado) || 0;
-    const montoEsperado  = parseFloat(corte.monto_inicial) + parseFloat(tots.total_efectivo);
-    const diferencia     = montoFinal - montoEsperado;
+    // Gastos del turno — se restan del efectivo esperado en caja
+    // Los gastos en efectivo salen físicamente de la caja durante el turno
+    const { rows: [gastosTurno] } = await client.query(
+      `SELECT
+         COALESCE(SUM(monto), 0)                                        AS total_gastos,
+         COALESCE(SUM(monto) FILTER (WHERE metodo_pago = 'efectivo'), 0) AS gastos_efectivo
+       FROM gastos
+       WHERE negocio_id = $1
+         AND fecha >= $2::date
+         AND fecha <= COALESCE($3::date, CURRENT_DATE)`,
+      [negocio_id, corte.fecha_apertura, null]
+    );
+
+    const montoFinal    = parseFloat(monto_final_contado) || 0;
+    const gastosEfectivo = parseFloat(gastosTurno.gastos_efectivo) || 0;
+
+    // Fórmula correcta: lo que debería haber físicamente en caja
+    // = fondo_inicial + lo que entró (ventas efectivo) - lo que salió (gastos efectivo)
+    const montoEsperado = parseFloat(corte.monto_inicial)
+                        + parseFloat(tots.total_efectivo)
+                        - gastosEfectivo;
+
+    const diferencia = montoFinal - montoEsperado;
 
     const { rows: [actualizado] } = await client.query(
       `UPDATE cortes_caja SET
@@ -107,12 +115,12 @@ export const cerrar = async (req, res) => {
     );
 
     await client.query('COMMIT');
-    res.json({
-      corte: actualizado,
-      mensaje: diferencia === 0
-        ? 'Caja cerrada — cuentas exactas ✓'
-        : `Caja cerrada — diferencia de ${diferencia > 0 ? '+' : ''}$${Math.abs(diferencia).toFixed(2)}`,
-    });
+
+    const msgDif = diferencia === 0
+      ? 'Caja cerrada — cuentas exactas ✓'
+      : `Caja cerrada — diferencia de ${diferencia > 0 ? '+' : ''}$${Math.abs(diferencia).toFixed(2)}`;
+
+    res.json({ corte: actualizado, mensaje: msgDif });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error(err);
@@ -122,7 +130,7 @@ export const cerrar = async (req, res) => {
   }
 };
 
-// ── Historial de cortes ───────────────────────────────────────────────────────
+// Historial de cortes
 export const historial = async (req, res) => {
   try {
     const { limit = 20, offset = 0 } = req.query;
@@ -142,9 +150,8 @@ export const historial = async (req, res) => {
   }
 };
 
-// ── Detalle de un corte (para PDF) ───────────────────────────────────────────
-// También usa created_at para el desglose de ventas del turno,
-// consistente con el criterio de cierre.
+// Detalle completo de un corte — para el PDF
+// Incluye ventas Y gastos del turno
 export const detalle = async (req, res) => {
   try {
     const negocio_id = req.user.negocio_id;
@@ -163,15 +170,16 @@ export const detalle = async (req, res) => {
     );
     if (!corte) return res.status(404).json({ error: 'Corte no encontrado' });
 
+    // Resumen de ventas del turno
     const { rows: ventas } = await query(
       `SELECT
-         COUNT(*) FILTER (WHERE estado = 'pagada')                                              as num_ventas,
-         COALESCE(SUM(total)     FILTER (WHERE estado = 'pagada'), 0)                          as total_ventas,
-         COALESCE(SUM(total)     FILTER (WHERE estado = 'pagada' AND metodo_pago = 'efectivo'),      0) as efectivo,
-         COALESCE(SUM(total)     FILTER (WHERE estado = 'pagada' AND metodo_pago = 'tarjeta'),       0) as tarjeta,
-         COALESCE(SUM(total)     FILTER (WHERE estado = 'pagada' AND metodo_pago = 'transferencia'), 0) as transferencia,
-         COALESCE(SUM(descuento) FILTER (WHERE estado = 'pagada'), 0)                          as total_descuentos,
-         COALESCE(SUM(iva)       FILTER (WHERE estado = 'pagada'), 0)                          as total_iva
+         COUNT(*) FILTER (WHERE estado = 'pagada')                                              AS num_ventas,
+         COALESCE(SUM(total)     FILTER (WHERE estado = 'pagada'), 0)                          AS total_ventas,
+         COALESCE(SUM(total)     FILTER (WHERE estado = 'pagada' AND metodo_pago = 'efectivo'),      0) AS efectivo,
+         COALESCE(SUM(total)     FILTER (WHERE estado = 'pagada' AND metodo_pago = 'tarjeta'),       0) AS tarjeta,
+         COALESCE(SUM(total)     FILTER (WHERE estado = 'pagada' AND metodo_pago = 'transferencia'), 0) AS transferencia,
+         COALESCE(SUM(descuento) FILTER (WHERE estado = 'pagada'), 0)                          AS total_descuentos,
+         COALESCE(SUM(iva)       FILTER (WHERE estado = 'pagada'), 0)                          AS total_iva
        FROM ventas
        WHERE negocio_id = $1
          AND created_at >= $2
@@ -179,22 +187,42 @@ export const detalle = async (req, res) => {
       [negocio_id, corte.fecha_apertura, corte.fecha_cierre]
     );
 
+    // Gastos del turno (para mostrar en el PDF)
+    const { rows: gastos } = await query(
+      `SELECT g.descripcion, g.monto, g.metodo_pago,
+              g.fecha,
+              COALESCE(cg.nombre, 'Sin categoría') AS categoria
+       FROM gastos g
+       LEFT JOIN categorias_gasto cg ON g.categoria_id = cg.id
+       WHERE g.negocio_id = $1
+         AND g.fecha >= $2::date
+         AND g.fecha <= COALESCE($3::date, CURRENT_DATE)
+       ORDER BY g.fecha DESC`,
+      [negocio_id, corte.fecha_apertura, corte.fecha_cierre]
+    );
+
+    const resumen_gastos = {
+      total_gastos:    gastos.reduce((s, g) => s + parseFloat(g.monto || 0), 0),
+      gastos_efectivo: gastos.filter(g => g.metodo_pago === 'efectivo').reduce((s, g) => s + parseFloat(g.monto || 0), 0),
+      detalle: gastos,
+    };
+
+    // Últimas ventas del turno
     const { rows: ultimas } = await query(
-      `SELECT v.folio,
-              (v.fecha AT TIME ZONE 'America/Mexico_City') as fecha_local,
+      `SELECT v.folio, (v.fecha AT TIME ZONE 'America/Mexico_City') AS fecha_local,
               v.total, v.metodo_pago, v.descuento,
-              COALESCE(c.nombre, 'Cliente general') as cliente_nombre
+              COALESCE(c.nombre, 'Cliente general') AS cliente_nombre
        FROM ventas v
        LEFT JOIN clientes c ON v.cliente_id = c.id
        WHERE v.negocio_id = $1
          AND v.created_at >= $2
          AND v.created_at <= COALESCE($3::timestamptz, NOW())
          AND v.estado = 'pagada'
-       ORDER BY v.created_at DESC LIMIT 20`,
+       ORDER BY v.fecha DESC LIMIT 20`,
       [negocio_id, corte.fecha_apertura, corte.fecha_cierre]
     );
 
-    res.json({ ...corte, resumen_ventas: ventas[0], ultimas_ventas: ultimas });
+    res.json({ ...corte, resumen_ventas: ventas[0], resumen_gastos, ultimas_ventas: ultimas });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error al obtener detalle del corte' });

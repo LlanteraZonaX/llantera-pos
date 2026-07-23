@@ -3,14 +3,7 @@ import api from "./api";
 
 // ─── Utilidades ───────────────────────────────────────────────────────────────
 const fmt = (n) => `$${Number(n || 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-// fmtFecha: toma los primeros 10 chars (YYYY-MM-DD) y los parsea como fecha LOCAL
-// para evitar que columnas tipo DATE (medianoche UTC) se desplacen al día anterior en MX.
-const fmtFecha = (f) => {
-  if (!f) return "—";
-  const s = typeof f === "string" ? f : new Date(f).toISOString();
-  const [y, m, d] = s.substring(0, 10).split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" });
-};
+const fmtFecha = (f) => f ? new Date(f).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
 const ESTADO_COLORES = {
   en_espera:  { bg: "#FEF3C7", color: "#92400E", label: "En espera" },
@@ -207,60 +200,22 @@ function ModalProducto({ producto, onClose, onSaved }) {
 }
 
 // ─── Modal Nueva Compra ───────────────────────────────────────────────────────
-function ModalCompra({ onClose, onSaved }) {
+function ModalCompra({ onClose, onSaved, productos }) {
   const [form, setForm] = useState({ proveedor: "", fecha_recepcion: hoyISO(), num_factura: "", notas: "" });
-  const [items, setItems] = useState([{ producto_id: "", nombre_producto: "", busqueda: "", cantidad: "", costo_unitario: "", showDropdown: false }]);
-  const [conIva, setConIva] = useState(false);
+  const [items, setItems] = useState([{ producto_id: "", medida: "", cantidad: "", costo_unitario: "" }]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [productosModal, setProductosModal] = useState([]);
-  const [cargandoProds, setCargandoProds] = useState(true);
 
-  // Carga fresca de TODOS los productos al abrir el modal
-  useEffect(() => {
-    api.productos("limit=500")
-      .then(r => setProductosModal((r.data || []).filter(p => !p.es_servicio)))
-      .catch(() => {})
-      .finally(() => setCargandoProds(false));
-  }, []);
-
-  const subtotal = items.reduce((s, i) => s + (parseFloat(i.cantidad)||0) * (parseFloat(i.costo_unitario)||0), 0);
-  const iva = conIva ? subtotal * 0.16 : 0;
-  const total = subtotal + iva;
-
-  const addItem = () => setItems(p => [...p, { producto_id: "", nombre_producto: "", busqueda: "", cantidad: "", costo_unitario: "", showDropdown: false }]);
-
-  const updItem = (idx, key, val) => setItems(p => {
-    const a = [...p];
-    a[idx] = { ...a[idx], [key]: val };
-    return a;
-  });
-
-  const seleccionarProducto = (idx, prod) => setItems(p => {
-    const a = [...p];
-    const label = prod.nombre + (prod.medida ? ` (${prod.medida})` : "");
-    a[idx] = { ...a[idx], producto_id: prod.id, nombre_producto: label, busqueda: label, showDropdown: false };
-    return a;
-  });
-
-  const productosFiltrados = (busqueda) => {
-    if (!busqueda || busqueda.length < 1) return [];
-    const q = busqueda.toLowerCase();
-    return productosModal.filter(p =>
-      p.nombre?.toLowerCase().includes(q) || p.medida?.toLowerCase().includes(q) || p.marca?.toLowerCase().includes(q)
-    ).slice(0, 10);
-  };
+  const total = items.reduce((s, i) => s + (parseFloat(i.cantidad)||0) * (parseFloat(i.costo_unitario)||0), 0);
+  const addItem = () => setItems(p => [...p, { producto_id: "", medida: "", cantidad: "", costo_unitario: "" }]);
+  const upd = (idx, k, v) => setItems(p => { const a = [...p]; a[idx][k] = v; return a; });
 
   const guardar = async () => {
     const validItems = items.filter(i => i.producto_id && i.cantidad && i.costo_unitario);
     if (!validItems.length) return setError("Agrega al menos un producto con cantidad y costo");
     setLoading(true); setError("");
     try {
-      await api.crearCompra({
-        ...form,
-        aplicar_iva: conIva,
-        items: validItems.map(i => ({ producto_id: i.producto_id, cantidad: parseFloat(i.cantidad), costo_unitario: parseFloat(i.costo_unitario) }))
-      });
+      await api.crearCompra({ ...form, items: validItems.map(i => ({ producto_id: i.producto_id, cantidad: parseFloat(i.cantidad), costo_unitario: parseFloat(i.costo_unitario) })) });
       onSaved();
     } catch (e) { setError(e.message); } finally { setLoading(false); }
   };
@@ -279,61 +234,23 @@ function ModalCompra({ onClose, onSaved }) {
           <div><label style={labelStyle}>No. factura</label><input style={inputStyle} placeholder="FAC-0001" value={form.num_factura} onChange={e => setForm(p => ({ ...p, num_factura: e.target.value }))} /></div>
           <div><label style={labelStyle}>Notas</label><input style={inputStyle} placeholder="Observaciones..." value={form.notas} onChange={e => setForm(p => ({ ...p, notas: e.target.value }))} /></div>
         </div>
-
-        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>
-          Productos recibidos {cargandoProds && <span style={{ fontWeight: 400, fontSize: 11, color: "var(--color-text-secondary)" }}>— cargando productos...</span>}
-        </div>
+        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>Productos recibidos</div>
         {items.map((item, idx) => (
-          <div key={idx} style={{ marginBottom: 10 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1.2fr 32px", gap: 6 }}>
-              <div style={{ position: "relative" }}>
-                <input
-                  style={{ ...inputStyle, borderColor: item.producto_id ? "#059669" : "var(--color-border-secondary)" }}
-                  placeholder="🔍 Buscar por nombre o medida..."
-                  value={item.busqueda}
-                  onChange={e => { updItem(idx, "busqueda", e.target.value); updItem(idx, "showDropdown", true); updItem(idx, "producto_id", ""); }}
-                  onFocus={() => updItem(idx, "showDropdown", true)}
-                  onBlur={() => setTimeout(() => updItem(idx, "showDropdown", false), 150)}
-                  autoComplete="off"
-                />
-                {item.showDropdown && item.busqueda.length >= 1 && (
-                  <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "var(--color-background-primary)", border: "1px solid var(--color-border-secondary)", borderRadius: 8, zIndex: 200, maxHeight: 220, overflowY: "auto", boxShadow: "0 8px 24px rgba(0,0,0,0.3)" }}>
-                    {productosFiltrados(item.busqueda).length === 0
-                      ? <div style={{ padding: "10px 14px", fontSize: 12, color: "var(--color-text-secondary)" }}>Sin resultados — prueba con otro término</div>
-                      : productosFiltrados(item.busqueda).map(p => (
-                        <button key={p.id} onMouseDown={() => seleccionarProducto(idx, p)}
-                          style={{ width: "100%", padding: "8px 14px", background: "none", border: "none", cursor: "pointer", textAlign: "left", fontSize: 13, borderBottom: "1px solid var(--color-border-tertiary)" }}>
-                          <div style={{ fontWeight: 600 }}>{p.nombre}</div>
-                          <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>{[p.medida, p.marca].filter(Boolean).join(" · ")}</div>
-                        </button>
-                      ))
-                    }
-                  </div>
-                )}
-              </div>
-              <input type="number" style={inputStyle} placeholder="Cantidad" value={item.cantidad} onChange={e => updItem(idx, "cantidad", e.target.value)} />
-              <input type="number" style={inputStyle} placeholder="Costo unit." value={item.costo_unitario} onChange={e => updItem(idx, "costo_unitario", e.target.value)} />
-              <button onClick={() => setItems(p => p.filter((_, i) => i !== idx))} disabled={items.length === 1} style={{ background: "#FEE2E2", border: "none", borderRadius: 8, cursor: "pointer", color: "#B91C1C", fontSize: 14 }}>✕</button>
-            </div>
-            {item.producto_id && item.cantidad && item.costo_unitario && (
-              <div style={{ fontSize: 11, color: "#059669", marginTop: 3, paddingLeft: 2 }}>
-                ✓ {item.nombre_producto} → {fmt((parseFloat(item.cantidad)||0) * (parseFloat(item.costo_unitario)||0))}
-              </div>
-            )}
+          <div key={idx} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1.2fr 32px", gap: 6, marginBottom: 8 }}>
+            <select style={inputStyle} value={item.producto_id} onChange={e => upd(idx, "producto_id", e.target.value)}>
+              <option value="">— Seleccionar producto —</option>
+              {(productos||[]).map(p => <option key={p.id} value={p.id}>{p.nombre}{p.medida ? ` (${p.medida})` : ""}</option>)}
+            </select>
+            <input type="number" style={inputStyle} placeholder="Cantidad" value={item.cantidad} onChange={e => upd(idx, "cantidad", e.target.value)} />
+            <input type="number" style={inputStyle} placeholder="Costo unit." value={item.costo_unitario} onChange={e => upd(idx, "costo_unitario", e.target.value)} />
+            <button onClick={() => setItems(p => p.filter((_, i) => i !== idx))} disabled={items.length === 1} style={{ background: "#FEE2E2", border: "none", borderRadius: 8, cursor: "pointer", color: "#B91C1C", fontSize: 14 }}>✕</button>
           </div>
         ))}
-        <button onClick={addItem} style={{ width: "100%", padding: "7px", border: "1px dashed #93C5FD", borderRadius: 8, background: "none", color: "#1D4ED8", cursor: "pointer", fontSize: 13, marginBottom: 12 }}>+ Agregar producto</button>
-
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, marginBottom: 12, cursor: "pointer", userSelect: "none", padding: "7px 10px", borderRadius: 6, border: conIva ? "1px solid #3B82F6" : "1px solid var(--color-border-tertiary)", background: conIva ? "rgba(59,130,246,0.08)" : "transparent" }}>
-          <input type="checkbox" checked={conIva} onChange={e => setConIva(e.target.checked)} style={{ width: 14, height: 14, cursor: "pointer", accentColor: "#3B82F6" }} />
-          <span>Incluir IVA <strong>+16%</strong> en esta compra</span>
-          {conIva && <span style={{ marginLeft: "auto", fontSize: 11, color: "#60A5FA" }}>+{fmt(iva)}</span>}
-        </label>
-
+        <button onClick={addItem} style={{ width: "100%", padding: "7px", border: "1px dashed #93C5FD", borderRadius: 8, background: "none", color: "#1D4ED8", cursor: "pointer", fontSize: 13, marginBottom: 16 }}>+ Agregar producto</button>
         <div style={{ background: "var(--color-background-tertiary)", borderRadius: 10, padding: "12px 16px", marginBottom: 16 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}><span style={{ color: "var(--color-text-secondary)" }}>Subtotal</span><span>{fmt(subtotal)}</span></div>
-          {conIva && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginTop: 4 }}><span style={{ color: "var(--color-text-secondary)" }}>IVA 16%</span><span>{fmt(iva)}</span></div>}
-          <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 600, fontSize: 15, marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--color-border-tertiary)" }}><span>Total</span><span style={{ color: "#1D4ED8" }}>{fmt(total)}</span></div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}><span style={{ color: "var(--color-text-secondary)" }}>Subtotal</span><span>{fmt(total)}</span></div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}><span style={{ color: "var(--color-text-secondary)" }}>IVA 16%</span><span>{fmt(total * 0.16)}</span></div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 600, fontSize: 15, marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--color-border-tertiary)" }}><span>Total</span><span style={{ color: "#1D4ED8" }}>{fmt(total * 1.16)}</span></div>
         </div>
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
           <button onClick={onClose} style={{ padding: "9px 20px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
@@ -399,7 +316,7 @@ function ModalGasto({ onClose, onSaved }) {
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 function Dashboard({ setSeccion, onNuevaCompra, onNuevoGasto, onVerStockBajo }) {
   const isMobile = useIsMobile();
-  const [data, setData]     = useState(null);
+  const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const cargar = useCallback(async () => {
@@ -412,139 +329,77 @@ function Dashboard({ setSeccion, onNuevaCompra, onNuevoGasto, onVerStockBajo }) 
 
   if (loading) return <div style={{ display: "flex", justifyContent: "center", padding: 60, color: "var(--color-text-secondary)" }}>Cargando datos...</div>;
 
-  const s = data?.semana || {};
-  const alertas = data?.alertas || {};
-  const diasSemana = data?.ventas_por_dia || [];
-  const productos  = data?.productos_semana || [];
-  const ultimas    = data?.ultimas_ventas || [];
-
-  const utilidadColor = parseFloat(s.utilidad_neta || 0) >= 0 ? "#34D399" : "#F87171";
-  const margenColor   = parseFloat(s.margen_bruto  || 0) >= 20 ? "#34D399"
-                      : parseFloat(s.margen_bruto  || 0) >= 0  ? "#FBBF24" : "#F87171";
+  const k = data?.kpis || {};
+  const semana = data?.ventas_semana || [];
+  const top = data?.top_productos || [];
+  const ultimas = data?.ultimas_ventas || [];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-
-      {/* ── Banner Punto de venta ──────────────────────────────────────────── */}
-      <button onClick={() => setSeccion("ventas")} style={{ display: "flex", alignItems: "center", gap: 20, background: "linear-gradient(135deg,#1D4ED8,#1e40af)", borderRadius: 14, padding: isMobile ? "18px 20px" : "20px 28px", border: "none", cursor: "pointer", color: "#fff", textAlign: "left", boxShadow: "0 6px 24px rgba(29,78,216,0.3)" }}>
-        <div style={{ width: 46, height: 46, borderRadius: 12, background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>🛒</div>
-        <div><div style={{ fontWeight: 800, fontSize: isMobile ? 16 : 19 }}>Punto de venta</div><div style={{ fontSize: 12, opacity: 0.75, marginTop: 2 }}>Registrar una nueva venta</div></div>
-        <div style={{ marginLeft: "auto", fontSize: 20, opacity: 0.6 }}>→</div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* ── Banner "Vender ahora" ─────────────────────────────────────────── */}
+      <button onClick={() => setSeccion("ventas")} style={{ display: "flex", alignItems: "center", gap: 20, background: "linear-gradient(135deg, #1D4ED8 0%, #1e40af 100%)", borderRadius: 14, padding: isMobile ? "18px 20px" : "22px 28px", border: "none", cursor: "pointer", color: "#fff", textAlign: "left", boxShadow: "0 6px 24px rgba(29,78,216,0.35)", transition: "transform 0.15s" }}>
+        <div style={{ width: 48, height: 48, borderRadius: 12, background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, flexShrink: 0 }}>🛒</div>
+        <div>
+          <div style={{ fontWeight: 800, fontSize: isMobile ? 17 : 20, letterSpacing: "-0.02em" }}>Punto de venta</div>
+          <div style={{ fontSize: 13, opacity: 0.75, marginTop: 2 }}>Registrar una nueva venta</div>
+        </div>
+        <div style={{ marginLeft: "auto", fontSize: 22, opacity: 0.6 }}>→</div>
       </button>
 
-      {/* ── Acciones rápidas ──────────────────────────────────────────────── */}
-      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
-        <button onClick={onNuevaCompra} style={{ padding: "7px 14px", background: "var(--color-background-secondary)", border: "1px solid var(--color-border-secondary)", borderRadius: 8, cursor: "pointer", fontSize: 12, color: "#fff" }}>🚚 Nueva compra</button>
-        <button onClick={onNuevoGasto}  style={{ padding: "7px 14px", background: "#0F766E", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>+ Gasto</button>
-        <button onClick={cargar}        style={{ padding: "7px 12px", background: "var(--color-background-tertiary)", border: "1px solid var(--color-border-secondary)", borderRadius: 8, cursor: "pointer", fontSize: 12 }}>↻</button>
+      {/* ── Acciones rápidas ─────────────────────────────────────────────── */}
+      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", flexWrap: "wrap" }}>
+        <button onClick={onNuevaCompra} style={{ padding: "8px 16px", background: "var(--color-background-secondary)", border: "1px solid var(--color-border-secondary)", borderRadius: 9, cursor: "pointer", fontSize: 13, color: "#fff" }}>🚚 Nueva compra</button>
+        <button onClick={onNuevoGasto} style={{ padding: "8px 16px", background: "#0F766E", color: "#fff", border: "none", borderRadius: 9, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>+ Gasto</button>
+        <button onClick={cargar} style={{ padding: "8px 12px", background: "var(--color-background-tertiary)", border: "1px solid var(--color-border-secondary)", borderRadius: 9, cursor: "pointer", fontSize: 13 }}>↻ Actualizar</button>
       </div>
 
-      {/* ── SECCIÓN: P&L de la semana ─────────────────────────────────────── */}
-      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--color-text-secondary)" }}>RESUMEN — ÚLTIMOS 7 DÍAS</div>
-
-      {/* Fila 1: Ingresos / Costo / Utilidad bruta / Margen */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(145px,1fr))", gap: 10 }}>
-        <KpiCard icono="💰" label="Ventas semana"    valor={fmt(s.total_ventas)}   sub={`${s.num_ventas||0} transacciones`} color="#60A5FA" />
-        <KpiCard icono="📦" label="Costo de ventas"  valor={fmt(s.costo_total)}    sub="precio compra × unidades"           color="#94A3B8" />
-        <KpiCard icono="📈" label="Utilidad bruta"   valor={fmt(s.utilidad_bruta)} sub={`Gastos: ${fmt(s.total_gastos)}`}   color={utilidadColor} />
-        <KpiCard icono="🎯" label="Utilidad neta"    valor={fmt(s.utilidad_neta)}  sub="ventas − costo − gastos"            color={utilidadColor} />
-        <KpiCard icono="%" label="Margen bruto"      valor={`${s.margen_bruto||0}%`} sub="utilidad / ventas"               color={margenColor} />
-        <KpiCard icono="🧾" label="Ticket promedio"  valor={fmt(s.ticket_promedio)} sub={`${s.num_ventas||0} tickets`}      color="#A78BFA" />
+      {/* ── KPIs ─────────────────────────────────────────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(155px, 1fr))", gap: 12 }}>
+        <KpiCard icono="💰" label="Ingresos hoy" valor={fmt(k.ingresos_hoy)} sub={`${k.num_ventas||0} ventas`} color="#1D4ED8" />
+        <KpiCard icono="💵" label="Efectivo" valor={fmt(k.efectivo)} sub="del día" color="#065F46" />
+        <KpiCard icono="💳" label="Tarjeta" valor={fmt(k.tarjeta)} sub="del día" color="#7C3AED" />
+        <KpiCard icono="🔧" label="Órdenes activas" valor={(k.en_espera||0)+(k.en_proceso||0)+(k.listo||0)} sub={`${k.listo||0} lista(s) p/ entregar`} color="#B45309" />
+        <KpiCard icono="📦" label="Stock bajo" valor={k.stock_bajo||0} sub="productos" color="#DC2626" alerta={(k.stock_bajo||0) > 0} onClick={onVerStockBajo} />
+        <KpiCard icono="💳" label="Cuentas × cobrar" valor={fmt(k.total_cxc)} sub={`${k.num_pendientes||0} clientes`} color="#92400E" />
       </div>
 
-      {/* Fila 2: Desglose de ingresos + Alertas */}
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr 1fr 1fr", gap: 10 }}>
-        <KpiCard icono="💵" label="Efectivo"       valor={fmt(s.efectivo)}      sub="semana" color="#34D399" />
-        <KpiCard icono="💳" label="Tarjeta"        valor={fmt(s.tarjeta)}       sub="semana" color="#818CF8" />
-        <KpiCard icono="🏦" label="Transferencia"  valor={fmt(s.transferencia)} sub="semana" color="#FB923C" />
-        <KpiCard icono="⚠"  label="Stock bajo"     valor={alertas.stock_bajo||0} sub="productos" color="#EF4444" alerta={(alertas.stock_bajo||0)>0} onClick={onVerStockBajo} />
-        <KpiCard icono="💳" label="CxC pendiente"  valor={fmt(alertas.total_cxc)} sub={`${alertas.num_cxc||0} clientes`} color="#F59E0B" />
-      </div>
-
-      {/* ── Gráfica + Órdenes ─────────────────────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr", gap: 16 }}>
-        <Card titulo="Ventas diarias — últimos 7 días">
-          <BarChart data={diasSemana.map((d,i) => ({ ...d, dia: i===diasSemana.length-1 ? "Hoy" : ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"][new Date(d.dia).getDay()] }))} />
+      {/* ── Gráfica + Top productos + Últimas ventas ──────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1.2fr", gap: 16 }}>
+        <Card titulo="Ventas — últimos 7 días">
+          <BarChart data={semana.map((d, i) => ({ ...d, dia: i === semana.length-1 ? "Hoy" : ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"][new Date(d.dia).getDay()] }))} />
         </Card>
-        <Card titulo="Órdenes activas">
-          {(alertas.en_espera||0)+(alertas.en_proceso||0)+(alertas.listo||0) === 0
-            ? <p style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>Sin órdenes activas</p>
-            : [["🕐 En espera", alertas.en_espera, "#F59E0B"],
-               ["⚙ En proceso", alertas.en_proceso, "#60A5FA"],
-               ["✅ Listo p/ entregar", alertas.listo, "#34D399"]
-              ].map(([label, val, color]) => val > 0 && (
-                <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--color-border-tertiary)", fontSize: 13 }}>
-                  <span>{label}</span>
-                  <span style={{ fontWeight: 700, color }}>{val}</span>
-                </div>
-              ))
+        <Card titulo="Top productos del mes">
+          {top.length === 0
+            ? <p style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>Sin ventas registradas aún</p>
+            : top.map((p, i) => (
+              <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--color-border-tertiary)", fontSize: 13 }}>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 160 }}>{p.nombre}</span>
+                <span style={{ fontWeight: 600, color: "#1D4ED8", whiteSpace: "nowrap" }}>{fmt(p.ingresos)}</span>
+              </div>
+            ))
           }
         </Card>
       </div>
 
-      {/* ── Productos vendidos esta semana ────────────────────────────────── */}
-      <Card titulo={`Productos vendidos esta semana${productos.length ? ` (${productos.length})` : ""}`}>
-        {productos.length === 0
-          ? <p style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>Sin ventas en los últimos 7 días.</p>
-          : (
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                <thead><tr style={{ background: "var(--color-background-tertiary)" }}>
-                  {["Producto","Medida","Cant.","Ingresos","Costo","Margen"].map((h,i) =>
-                    <th key={h} style={{ padding: "8px 10px", textAlign: i>=2?"right":"left", fontSize: 10, fontWeight: 700, color: "var(--color-text-secondary)", textTransform: "uppercase" }}>{h}</th>)}
-                </tr></thead>
-                <tbody>
-                  {productos.map((p, i) => {
-                    const ingr   = parseFloat(p.ingresos) || 0;
-                    const costo  = parseFloat(p.costo)    || 0;
-                    const margen = ingr > 0 ? ((ingr - costo) / ingr * 100).toFixed(0) : 0;
-                    const mColor = parseInt(margen) >= 20 ? "#34D399" : parseInt(margen) >= 0 ? "#FBBF24" : "#F87171";
-                    return (
-                      <tr key={i} style={{ borderTop: "1px solid var(--color-border-tertiary)" }}>
-                        <td style={{ padding: "8px 10px", fontWeight: 600, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nombre}</td>
-                        <td style={{ padding: "8px 10px", color: "var(--color-text-secondary)" }}>{p.medida || "—"}</td>
-                        <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 700 }}>{parseFloat(p.cantidad_vendida)}</td>
-                        <td style={{ padding: "8px 10px", textAlign: "right", color: "#60A5FA", fontWeight: 600 }}>{fmt(ingr)}</td>
-                        <td style={{ padding: "8px 10px", textAlign: "right", color: "var(--color-text-secondary)" }}>{costo > 0 ? fmt(costo) : "—"}</td>
-                        <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 700, color: mColor }}>{costo > 0 ? `${margen}%` : "—"}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-                <tfoot>
-                  <tr style={{ borderTop: "2px solid var(--color-border-tertiary)", background: "var(--color-background-tertiary)" }}>
-                    <td colSpan={2} style={{ padding: "8px 10px", fontWeight: 700, fontSize: 11 }}>TOTALES</td>
-                    <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 700 }}>{productos.reduce((s,p) => s + parseFloat(p.cantidad_vendida||0), 0)}</td>
-                    <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 700, color: "#60A5FA" }}>{fmt(s.total_ventas)}</td>
-                    <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 700 }}>{fmt(s.costo_total)}</td>
-                    <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 700, color: margenColor }}>{s.margen_bruto||0}%</td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          )
-        }
-      </Card>
-
       {/* ── Últimas ventas ────────────────────────────────────────────────── */}
-      <Card titulo="Últimas ventas capturadas">
+      <Card titulo="Últimas ventas">
         {ultimas.length === 0
-          ? <p style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>Sin ventas recientes</p>
+          ? <p style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>Sin ventas registradas hoy</p>
           : (
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead><tr style={{ background: "var(--color-background-tertiary)" }}>
-                  {["Folio","Hora","Cliente","Método","Total"].map(h =>
-                    <th key={h} style={{ padding: "8px 10px", textAlign: h==="Total"?"right":"left", fontSize: 10, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase" }}>{h}</th>)}
+                  {["Folio", "Hora", "Cliente", "Método", "Total"].map(h =>
+                    <th key={h} style={{ padding: "8px 12px", textAlign: h === "Total" ? "right" : "left", fontSize: 11, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase" }}>{h}</th>)}
                 </tr></thead>
                 <tbody>
                   {ultimas.map(v => (
                     <tr key={v.folio} style={{ borderTop: "1px solid var(--color-border-tertiary)" }}>
-                      <td style={{ padding: "8px 10px", fontWeight: 600 }}>{v.folio}</td>
-                      <td style={{ padding: "8px 10px", color: "var(--color-text-secondary)" }}>{new Date(v.fecha_local).toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"})}</td>
-                      <td style={{ padding: "8px 10px" }}>{v.cliente_nombre}</td>
-                      <td style={{ padding: "8px 10px", textTransform: "capitalize" }}>{v.metodo_pago}</td>
-                      <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 700, color: "#60A5FA" }}>{fmt(v.total)}</td>
+                      <td style={{ padding: "8px 12px", fontWeight: 600 }}>{v.folio}</td>
+                      <td style={{ padding: "8px 12px", color: "var(--color-text-secondary)" }}>{new Date(v.fecha_local).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}</td>
+                      <td style={{ padding: "8px 12px" }}>{v.cliente_nombre}</td>
+                      <td style={{ padding: "8px 12px", textTransform: "capitalize" }}>{v.metodo_pago}</td>
+                      <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 700, color: "#60A5FA" }}>{fmt(v.total)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -557,313 +412,14 @@ function Dashboard({ setSeccion, onNuevaCompra, onNuevoGasto, onVerStockBajo }) 
   );
 }
 
-
-// ─── Importación masiva de productos ─────────────────────────────────────────
-// Parseo CSV manual — sin librerías externas
-const parsearFilaCSV = (linea) => {
-  const vals = []; let actual = ''; let enComillas = false;
-  for (let i = 0; i < linea.length; i++) {
-    const c = linea[i];
-    if (c === '"') { enComillas = !enComillas; }
-    else if (c === ',' && !enComillas) { vals.push(actual.trim()); actual = ''; }
-    else { actual += c; }
-  }
-  vals.push(actual.trim());
-  return vals;
-};
-
-const parsearCSV = (texto) => {
-  const lineas = texto.trim().split('\n').map(l => l.replace(/\r/g, '').replace(/^\uFEFF/, ''));
-  if (lineas.length < 2) return null;
-  const headers = parsearFilaCSV(lineas[0]).map(h => h.replace(/"/g, '').trim().toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')); // quitar acentos en headers
-  return lineas.slice(1).filter(l => l.trim()).map(l => {
-    const vals = parsearFilaCSV(l);
-    const obj = {};
-    headers.forEach((h, i) => { obj[h] = (vals[i] || '').replace(/^"|"$/g, ''); });
-    return obj;
-  });
-};
-
-// Descargar plantilla CSV para Excel
-const descargarPlantillaProductos = () => {
-  const BOM  = '\uFEFF';
-  const cols = ['nombre','medida','marca','sku','precio_venta','precio_compra','stock_actual','stock_minimo','descripcion','categoria'];
-  const ej1  = ['LLANTA SEMINUEVA 185/60R14','185/60R14','HANKOOK','LS-001','500','300','10','2','Llanta en buen estado','Llanta'];
-  const ej2  = ['PARCHE GRANDE','#4','REMA','PAR-G-001','15','8','100','20','','Consumible'];
-  const csv  = BOM + [cols, ej1, ej2].map(r => r.map(c => `"${c}"`).join(',')).join('\n');
-  const a    = document.createElement('a');
-  a.href     = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
-  a.download = 'formato_importacion_productos.csv';
-  a.click();
-};
-
-function ModalImportarProductos({ onClose, onImportado }) {
-  const [paso, setPaso]         = useState('subir'); // subir | preview | resultado
-  const [filas, setFilas]       = useState([]);
-  const [erroresPrev, setErroresPrev] = useState([]);
-  const [importando, setImportando]   = useState(false);
-  const [resultado, setResultado]     = useState(null);
-  const inputRef = useRef(null);
-
-  const CAMPOS_REQUERIDOS = ['nombre', 'precio_venta'];
-  const CAMPOS_VALIDOS    = ['nombre','medida','marca','sku','precio_venta','precio_compra','stock_actual','stock_minimo','descripcion','categoria'];
-
-  const leerArchivo = (e) => {
-    const archivo = e.target.files[0];
-    if (!archivo) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const texto  = ev.target.result;
-      const parsed = parsearCSV(texto);
-      if (!parsed || parsed.length === 0) {
-        alert('El archivo está vacío o no tiene el formato correcto.');
-        return;
-      }
-      // Validación previa fila a fila
-      const errs = [];
-      parsed.forEach((p, i) => {
-        if (!p.nombre?.trim())                   errs.push(`Fila ${i+2}: falta "nombre"`);
-        else if (!p.precio_venta?.trim())        errs.push(`Fila ${i+2} (${p.nombre}): falta "precio_venta"`);
-        else if (isNaN(parseFloat(p.precio_venta))) errs.push(`Fila ${i+2} (${p.nombre}): "precio_venta" no es un número`);
-      });
-      setFilas(parsed);
-      setErroresPrev(errs);
-      setPaso('preview');
-    };
-    reader.readAsText(archivo, 'UTF-8');
-  };
-
-  const confirmarImport = async () => {
-    setImportando(true);
-    try {
-      const res = await api.importarProductos(filas);
-      setResultado(res);
-      setPaso('resultado');
-    } catch (e) {
-      alert('Error al importar: ' + e.message);
-    } finally {
-      setImportando(false);
-    }
-  };
-
-  const filasValidas   = filas.filter(p => p.nombre?.trim() && !isNaN(parseFloat(p.precio_venta)));
-  const filasInvalidas = filas.length - filasValidas.length;
-
-  return (
-    <div style={overlayStyle}>
-      <div style={{ ...modalBase, maxWidth: 680 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-          <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>📤 Importar productos desde Excel/CSV</h2>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)" }}>✕</button>
-        </div>
-
-        {paso === 'subir' && (
-          <div>
-            <div style={{ background: "var(--color-background-secondary)", borderRadius: 10, padding: 20, marginBottom: 16, border: "1px solid var(--color-border-tertiary)" }}>
-              <p style={{ margin: "0 0 12px", fontSize: 13, color: "var(--color-text-secondary)" }}>
-                Sube un archivo CSV o Excel (guardado como CSV). Descarga el formato de ejemplo para ver los campos requeridos.
-              </p>
-              <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 16 }}>
-                <strong>Columnas requeridas:</strong> nombre, precio_venta<br/>
-                <strong>Columnas opcionales:</strong> medida, marca, sku, precio_compra, stock_actual, stock_minimo, descripcion, categoria
-              </div>
-              <button onClick={descargarPlantillaProductos} style={{ padding: "8px 16px", background: "#059669", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600, marginBottom: 16 }}>
-                📥 Descargar formato de ejemplo
-              </button>
-            </div>
-            <input ref={inputRef} type="file" accept=".csv,.txt" style={{ display: "none" }} onChange={leerArchivo} />
-            <button onClick={() => inputRef.current?.click()} style={{ width: "100%", padding: "32px", border: "2px dashed var(--color-border-secondary)", borderRadius: 12, background: "none", cursor: "pointer", fontSize: 14, color: "var(--color-text-secondary)", display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 32 }}>📂</span>
-              <span style={{ fontWeight: 600 }}>Seleccionar archivo CSV</span>
-              <span style={{ fontSize: 12 }}>Guarda tu Excel como CSV antes de subir</span>
-            </button>
-          </div>
-        )}
-
-        {paso === 'preview' && (
-          <div>
-            <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
-              <div style={{ background: "rgba(5,150,105,0.1)", border: "1px solid #059669", borderRadius: 8, padding: "10px 16px", flex: 1 }}>
-                <div style={{ fontSize: 11, color: "#059669" }}>LISTOS PARA IMPORTAR</div>
-                <div style={{ fontWeight: 700, fontSize: 22, color: "#059669" }}>{filasValidas.length}</div>
-              </div>
-              {filasInvalidas > 0 && (
-                <div style={{ background: "rgba(185,28,28,0.08)", border: "1px solid #B91C1C", borderRadius: 8, padding: "10px 16px", flex: 1 }}>
-                  <div style={{ fontSize: 11, color: "#B91C1C" }}>CON ERRORES (se omitirán)</div>
-                  <div style={{ fontWeight: 700, fontSize: 22, color: "#B91C1C" }}>{filasInvalidas}</div>
-                </div>
-              )}
-            </div>
-
-            {erroresPrev.length > 0 && (
-              <div style={{ background: "rgba(185,28,28,0.06)", borderRadius: 8, padding: "10px 14px", marginBottom: 12, maxHeight: 100, overflowY: "auto" }}>
-                {erroresPrev.map((e, i) => <div key={i} style={{ fontSize: 12, color: "#B91C1C", marginBottom: 2 }}>⚠ {e}</div>)}
-              </div>
-            )}
-
-            <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 8, fontWeight: 600 }}>Vista previa (primeras 5 filas válidas):</div>
-            <div style={{ overflowX: "auto", maxHeight: 220, overflowY: "auto", marginBottom: 16 }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                <thead><tr style={{ background: "var(--color-background-tertiary)" }}>
-                  {['Nombre','Medida','Marca','P.Venta','P.Compra','Stock','Categoría'].map(h =>
-                    <th key={h} style={{ padding: "6px 10px", textAlign: "left", fontSize: 10, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>)}
-                </tr></thead>
-                <tbody>
-                  {filasValidas.slice(0, 5).map((p, i) => (
-                    <tr key={i} style={{ borderTop: "1px solid var(--color-border-tertiary)" }}>
-                      <td style={{ padding: "6px 10px", fontWeight: 600 }}>{p.nombre}</td>
-                      <td style={{ padding: "6px 10px", color: "var(--color-text-secondary)" }}>{p.medida || '—'}</td>
-                      <td style={{ padding: "6px 10px", color: "var(--color-text-secondary)" }}>{p.marca || '—'}</td>
-                      <td style={{ padding: "6px 10px" }}>{fmt(p.precio_venta)}</td>
-                      <td style={{ padding: "6px 10px", color: "var(--color-text-secondary)" }}>{p.precio_compra ? fmt(p.precio_compra) : '—'}</td>
-                      <td style={{ padding: "6px 10px" }}>{p.stock_actual || '0'}</td>
-                      <td style={{ padding: "6px 10px", color: "var(--color-text-secondary)" }}>{p.categoria || '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {filasValidas.length > 5 && <p style={{ fontSize: 12, color: "var(--color-text-secondary)", margin: "0 0 16px" }}>...y {filasValidas.length - 5} filas más</p>}
-
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-              <button onClick={() => { setPaso('subir'); setFilas([]); }} style={{ padding: "9px 18px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13, color: "#fff" }}>← Cambiar archivo</button>
-              <button onClick={confirmarImport} disabled={importando || filasValidas.length === 0} style={{ padding: "9px 24px", background: filasValidas.length > 0 ? "#1D4ED8" : "var(--color-background-tertiary)", color: "#fff", border: "none", borderRadius: 8, cursor: filasValidas.length > 0 ? "pointer" : "not-allowed", fontSize: 13, fontWeight: 600 }}>
-                {importando ? "Importando..." : `✓ Importar ${filasValidas.length} productos`}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {paso === 'resultado' && resultado && (
-          <div>
-            <div style={{ textAlign: "center", padding: "20px 0 24px" }}>
-              <div style={{ fontSize: 48, marginBottom: 12 }}>{resultado.errores?.length === 0 ? "✅" : "⚠️"}</div>
-              <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 6 }}>{resultado.mensaje}</div>
-            </div>
-            <div style={{ display: "flex", gap: 12, marginBottom: resultado.errores?.length > 0 ? 16 : 0 }}>
-              <div style={{ background: "rgba(5,150,105,0.1)", border: "1px solid #059669", borderRadius: 8, padding: "10px 16px", flex: 1, textAlign: "center" }}>
-                <div style={{ fontSize: 11, color: "#059669" }}>CREADOS</div>
-                <div style={{ fontWeight: 700, fontSize: 24, color: "#059669" }}>{resultado.creados}</div>
-              </div>
-              <div style={{ background: "rgba(100,116,139,0.1)", border: "1px solid var(--color-border-secondary)", borderRadius: 8, padding: "10px 16px", flex: 1, textAlign: "center" }}>
-                <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>OMITIDOS</div>
-                <div style={{ fontWeight: 700, fontSize: 24 }}>{resultado.omitidos}</div>
-              </div>
-            </div>
-            {resultado.errores?.length > 0 && (
-              <div style={{ background: "rgba(185,28,28,0.06)", borderRadius: 8, padding: "10px 14px", maxHeight: 130, overflowY: "auto", marginBottom: 16 }}>
-                {resultado.errores.map((e, i) => <div key={i} style={{ fontSize: 12, color: "#B91C1C", marginBottom: 2 }}>⚠ Fila {e.fila}: {e.mensaje}</div>)}
-              </div>
-            )}
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-              <button onClick={() => { setFilas([]); setPaso('subir'); setResultado(null); }} style={{ padding: "9px 18px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13, color: "#fff" }}>Importar otro archivo</button>
-              <button onClick={() => { onImportado(); onClose(); }} style={{ padding: "9px 24px", background: "#059669", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>✓ Cerrar y actualizar</button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ModalVentasProducto({ producto, onClose }) {
-  const [data, setData]       = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [ticketId, setTicketId] = useState(null);
-
-  useEffect(() => {
-    api.ventasPorProducto(producto.id)
-      .then(setData)
-      .catch(() => setData(null))
-      .finally(() => setLoading(false));
-  }, [producto.id]);
-
-  const resumen = data?.resumen || {};
-  const ventas  = data?.ventas  || [];
-
-  return (
-    <div style={overlayStyle}>
-      <div style={{ ...modalBase, maxWidth: 700 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>📊 Historial de ventas</h2>
-            <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--color-text-secondary)" }}>{producto.nombre}{producto.medida ? ` · ${producto.medida}` : ""}</p>
-          </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)" }}>✕</button>
-        </div>
-
-        {loading ? <div style={{ textAlign: "center", padding: 40, color: "var(--color-text-secondary)" }}>Cargando...</div> : (
-          <>
-            {/* Resumen */}
-            <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
-              {[
-                ["Veces vendido", resumen.num_ventas || 0, "var(--color-text-primary)", v => v],
-                ["Unidades totales", resumen.total_unidades || 0, "#60A5FA", v => parseFloat(v).toFixed(0)],
-                ["Ingresos totales", resumen.total_ingresos || 0, "#34D399", fmt],
-              ].map(([label, val, color, f]) => (
-                <div key={label} style={{ background: "var(--color-background-secondary)", borderRadius: 10, padding: "10px 16px", border: "1px solid var(--color-border-tertiary)", flex: 1 }}>
-                  <div style={{ fontSize: 10, color: "var(--color-text-secondary)", textTransform: "uppercase", marginBottom: 3 }}>{label}</div>
-                  <div style={{ fontWeight: 700, fontSize: 18, color }}>{f(val)}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Tabla de ventas */}
-            {ventas.length === 0
-              ? <p style={{ textAlign: "center", color: "var(--color-text-secondary)", padding: 30 }}>Este producto no tiene ventas registradas.</p>
-              : (
-                <div style={{ overflowX: "auto", maxHeight: 380, overflowY: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                    <thead style={{ position: "sticky", top: 0, zIndex: 1 }}>
-                      <tr style={{ background: "var(--color-background-tertiary)" }}>
-                        {["Folio","Fecha","Hora","Cliente","Cant.","P.U.","Importe","Método",""].map((h,i) =>
-                          <th key={h} style={{ padding: "8px 10px", textAlign: i>=4&&i<=6?"right":"left", fontSize: 10, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>)}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {ventas.map(v => (
-                        <tr key={v.venta_id} style={{ borderTop: "1px solid var(--color-border-tertiary)" }}>
-                          <td style={{ padding: "8px 10px", fontWeight: 600 }}>{v.folio}</td>
-                          <td style={{ padding: "8px 10px", color: "var(--color-text-secondary)", whiteSpace: "nowrap" }}>{new Date(v.fecha_local).toLocaleDateString("es-MX",{day:"2-digit",month:"short",year:"numeric"})}</td>
-                          <td style={{ padding: "8px 10px", color: "var(--color-text-secondary)" }}>{new Date(v.fecha_local).toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"})}</td>
-                          <td style={{ padding: "8px 10px" }}>{v.cliente_nombre}</td>
-                          <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 600 }}>{parseFloat(v.cantidad)}</td>
-                          <td style={{ padding: "8px 10px", textAlign: "right", color: "var(--color-text-secondary)" }}>{fmt(v.precio_unitario)}</td>
-                          <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 700, color: "#60A5FA" }}>{fmt(v.subtotal)}</td>
-                          <td style={{ padding: "8px 10px", textTransform: "capitalize", color: "var(--color-text-secondary)" }}>{v.metodo_pago}</td>
-                          <td style={{ padding: "8px 10px" }}>
-                            <button onClick={() => setTicketId(v.venta_id)} style={{ padding: "4px 10px", background: "var(--color-background-tertiary)", border: "1px solid var(--color-border-secondary)", borderRadius: 6, cursor: "pointer", fontSize: 11, whiteSpace: "nowrap", color: "#fff" }}>🧾 Ticket</button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )
-            }
-          </>
-        )}
-        <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end" }}>
-          <button onClick={onClose} style={{ padding: "9px 20px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13, color: "#fff" }}>Cerrar</button>
-        </div>
-      </div>
-
-      {/* Ticket preview anidado */}
-      {ticketId && <ModalTicket ventaId={ticketId} onClose={() => setTicketId(null)} />}
-    </div>
-  );
-}
-
+// ─── Módulo Inventario ────────────────────────────────────────────────────────
 function Inventario({ onNuevoProducto, filtroStockBajoInicial = false }) {
   const [productos, setProductos] = useState([]);
   const [buscar, setBuscar] = useState("");
   const [loading, setLoading] = useState(true);
   const [fotoModal, setFotoModal] = useState(null); // producto seleccionado
   const [soloStockBajo, setSoloStockBajo] = useState(filtroStockBajoInicial);
-  const [editando, setEditando] = useState(null);
-  const [ventasProducto, setVentasProducto] = useState(null);
-  const [mostrarImport, setMostrarImport] = useState(false);
+  const [editando, setEditando] = useState(null); // producto que se está editando
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -885,8 +441,6 @@ function Inventario({ onNuevoProducto, filtroStockBajoInicial = false }) {
         <button onClick={() => setSoloStockBajo(v => !v)} style={{ padding: "8px 14px", borderRadius: 20, border: `1px solid ${soloStockBajo ? "#EF4444" : "var(--color-border-secondary)"}`, background: soloStockBajo ? "rgba(239,68,68,0.12)" : "none", color: soloStockBajo ? "#EF4444" : "var(--color-text-secondary)", cursor: "pointer", fontSize: 12, fontWeight: soloStockBajo ? 700 : 400, whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6 }}>
           ⚠ Stock bajo {soloStockBajo ? "✓" : ""}
         </button>
-        <button onClick={descargarPlantillaProductos} style={{ padding: "8px 14px", background: "none", border: "1px solid var(--color-border-secondary)", borderRadius: 8, cursor: "pointer", fontSize: 12, color: "#fff", whiteSpace: "nowrap" }}>📥 Formato</button>
-        <button onClick={() => setMostrarImport(true)} style={{ padding: "8px 14px", background: "#7C3AED", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>📤 Importar</button>
         <button onClick={onNuevoProducto} style={{ padding: "8px 18px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>+ Producto</button>
       </div>
       {loading ? <div style={{ textAlign: "center", padding: 40, color: "var(--color-text-secondary)" }}>Cargando...</div> : (
@@ -920,8 +474,7 @@ function Inventario({ onNuevoProducto, filtroStockBajoInicial = false }) {
                         : <span style={{ background: "#D1FAE5", color: "#065F46", fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20 }}>OK</span>}
                     </td>
                     <td style={{ padding: "8px 14px" }}>
-                      <button onClick={() => setVentasProducto(p)} style={{ padding: "5px 10px", background: "none", border: "1px solid var(--color-border-secondary)", borderRadius: 6, cursor: "pointer", fontSize: 11, whiteSpace: "nowrap", marginRight: 4, color: "#fff" }}>📊 Ventas</button>
-                      <button onClick={() => setEditando(p)} style={{ padding: "5px 12px", background: "var(--color-background-tertiary)", border: "1px solid var(--color-border-secondary)", borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", color: "#fff" }}>✏️ Editar</button>
+                      <button onClick={() => setEditando(p)} style={{ padding: "5px 12px", background: "var(--color-background-tertiary)", border: "1px solid var(--color-border-secondary)", borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>✏️ Editar</button>
                     </td>
                   </tr>
                 ))}
@@ -931,8 +484,6 @@ function Inventario({ onNuevoProducto, filtroStockBajoInicial = false }) {
       )}
       {fotoModal && <ModalFotosProducto producto={fotoModal} onClose={() => setFotoModal(null)} onSaved={() => { setFotoModal(null); cargar(); }} />}
       {editando && <ModalProducto producto={editando} onClose={() => setEditando(null)} onSaved={() => { setEditando(null); cargar(); }} />}
-      {ventasProducto && <ModalVentasProducto producto={ventasProducto} onClose={() => setVentasProducto(null)} />}
-      {mostrarImport && <ModalImportarProductos onClose={() => setMostrarImport(false)} onImportado={cargar} />}
     </div>
   );
 }
@@ -1477,6 +1028,8 @@ const generarPDFCorte = async (corteId) => {
     const diffColor = diff === 0 ? "#059669" : diff > 0 ? "#1D4ED8" : "#B91C1C";
     const diffLabel = diff === 0 ? "Exacto ✓" : diff > 0 ? `Sobrante: $${Math.abs(diff).toFixed(2)}` : `Faltante: $${Math.abs(diff).toFixed(2)}`;
     const rv = d.resumen_ventas || {};
+    const rg = d.resumen_gastos  || {};
+    const gastosEfectivo = parseFloat(rg.gastos_efectivo || 0);
     const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
 <title>Corte de Caja ${d.fecha_apertura ? fmtD(d.fecha_apertura) : ""}</title>
 <style>
@@ -1490,6 +1043,7 @@ const generarPDFCorte = async (corteId) => {
   h1 { font-size: 15px; font-weight: 700; text-align: center; background: #111; color: #fff; padding: 8px; margin-bottom: 16px; letter-spacing: 0.05em; }
   .fila { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #eee; }
   .fila strong { font-weight: 600; }
+  .fila.neg strong { color: #B91C1C; }
   .seccion { background: #f8f8f8; border: 1px solid #ddd; border-radius: 6px; padding: 12px 16px; margin-bottom: 12px; }
   .seccion h2 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #555; margin-bottom: 8px; }
   .resultado { font-size: 16px; font-weight: 800; color: ${diffColor}; text-align: right; padding: 10px 16px; border: 2px solid ${diffColor}; border-radius: 8px; margin-bottom: 12px; }
@@ -1528,11 +1082,22 @@ const generarPDFCorte = async (corteId) => {
   ${parseFloat(rv.total_descuentos||0) > 0 ? `<div class="fila"><span>Descuentos aplicados</span><strong>-$${parseFloat(rv.total_descuentos).toFixed(2)}</strong></div>` : ""}
 </div>
 
+${(rg.detalle||[]).length > 0 ? `
 <div class="seccion">
-  <h2>Arqueo de caja</h2>
+  <h2>Gastos del turno</h2>
+  ${(rg.detalle||[]).map(g => `<div class="fila${g.metodo_pago==='efectivo'?' neg':''}">
+    <span>${g.categoria} — ${g.descripcion}</span>
+    <strong>-$${parseFloat(g.monto).toFixed(2)} ${g.metodo_pago==='efectivo'?'(efectivo)':''}</strong>
+  </div>`).join("")}
+  <div class="fila" style="margin-top:6px;font-weight:700"><span>Total gastos efectivo</span><strong style="color:#B91C1C">-$${gastosEfectivo.toFixed(2)}</strong></div>
+</div>` : ""}
+
+<div class="seccion">
+  <h2>Arqueo de caja (efectivo físico)</h2>
   <div class="fila"><span>Fondo inicial</span><strong>$${parseFloat(d.monto_inicial||0).toFixed(2)}</strong></div>
-  <div class="fila"><span>+ Efectivo en ventas</span><strong>$${parseFloat(rv.efectivo||0).toFixed(2)}</strong></div>
-  <div class="fila"><span>= Monto esperado</span><strong>$${parseFloat(d.monto_esperado||0).toFixed(2)}</strong></div>
+  <div class="fila"><span>+ Ventas en efectivo</span><strong>$${parseFloat(rv.efectivo||0).toFixed(2)}</strong></div>
+  ${gastosEfectivo > 0 ? `<div class="fila neg"><span>− Gastos en efectivo</span><strong>-$${gastosEfectivo.toFixed(2)}</strong></div>` : ""}
+  <div class="fila" style="font-weight:700;margin-top:4px;padding-top:4px;border-top:2px solid #ccc"><span>= Efectivo esperado</span><strong>$${parseFloat(d.monto_esperado||0).toFixed(2)}</strong></div>
   <div class="fila"><span>Efectivo contado</span><strong>$${parseFloat(d.monto_final_contado||0).toFixed(2)}</strong></div>
 </div>
 
@@ -2366,11 +1931,10 @@ function Reportes() {
   const isMobile = useIsMobile();
   const [tab, setTab] = useState("ventas");
   const TABS = [
-    { id: "ventas",     label: "Ventas",             icon: "💰" },
-    { id: "productos",  label: "Más vendido",         icon: "🏆" },
-    { id: "vendedores", label: "Por vendedor",        icon: "🧾" },
-    { id: "llantas",    label: "Llantas recibidas",   icon: "📥" },
-    { id: "inventario", label: "Inventario actual",   icon: "📦" },
+    { id: "ventas",     label: "Ventas",                   icon: "💰" },
+    { id: "productos",  label: "Más vendido",               icon: "🏆" },
+    { id: "vendedores", label: "Por vendedor",              icon: "🧾" },
+    { id: "llantas",    label: "Llantas recibidas",         icon: "📥" },
   ];
   return (
     <div>
@@ -2387,11 +1951,10 @@ function Reportes() {
           }}>{t.icon} {t.label}</button>
         ))}
       </div>
-      {tab === "ventas"     && <ReporteVentas />}
-      {tab === "productos"  && <ReporteProductoMasVendido />}
+      {tab === "ventas" && <ReporteVentas />}
+      {tab === "productos" && <ReporteProductoMasVendido />}
       {tab === "vendedores" && <ReporteCotizacionesPorVendedor />}
-      {tab === "llantas"    && <ReporteLlantasPorMes />}
-      {tab === "inventario" && <ReporteInventarioActual />}
+      {tab === "llantas" && <ReporteLlantasPorMes />}
     </div>
   );
 }
@@ -2940,11 +2503,9 @@ function Ventas() {
             <div>
               <label style={labelStyle}>Fecha de la venta</label>
               <input type="date" style={inputStyle} max={hoyISO()} value={fechaVenta} onChange={e => setFechaVenta(e.target.value)} />
-          {fechaVenta && fechaVenta !== hoyISO() && (
-            <div style={{ fontSize: 11, color: "#fff", marginTop: 4 }}>
-              ⚠ Se registrará con fecha {(() => { const [y,m,d] = fechaVenta.split("-"); return `${parseInt(d)} ${["","ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"][parseInt(m)]} ${y}`; })()}
-            </div>
-          )}
+              {fechaVenta && fechaVenta !== hoyISO() && (
+                <div style={{ fontSize: 11, color: "#D97706", marginTop: 4 }}>⚠ Se registrará con fecha {fmtFecha(fechaVenta)}</div>
+              )}
             </div>
           </div>
         )}
@@ -2965,167 +2526,11 @@ const ESTADO_VENTA_INFO = {
   cancelada: { label: "Cancelada", bg: "#FEE2E2", color: "#B91C1C" },
 };
 
-function ModalTicket({ ventaId, onClose }) {
-  const [venta, setVenta] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    api.ventaDetalle(ventaId)
-      .then(setVenta)
-      .catch(e => setError(e.message || "No se pudo cargar el ticket"))
-      .finally(() => setLoading(false));
-  }, [ventaId]);
-
-  const imprimir = () => {
-    if (!venta) return;
-    const fmtH = (ts) => new Date(ts).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
-    const fmtD = (ts) => new Date(ts).toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" });
-    const tieneDesc = parseFloat(venta.descuento || 0) > 0;
-    const tieneIva  = parseFloat(venta.iva || 0) > 0;
-
-    const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
-<title>Ticket ${venta.folio}</title>
-<style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family: 'Courier New', monospace; font-size: 12px; color:#111; max-width:320px; margin:0 auto; padding:16px; }
-  .center { text-align:center; }
-  .logo { width:60px; height:60px; border-radius:8px; object-fit:cover; margin:0 auto 6px; display:block; }
-  h1 { font-size:14px; font-weight:700; text-align:center; margin:4px 0; }
-  .sub { font-size:10px; color:#555; text-align:center; margin-bottom:2px; }
-  .sep { border:none; border-top:1px dashed #888; margin:8px 0; }
-  table { width:100%; border-collapse:collapse; font-size:11px; }
-  th { text-align:left; font-size:10px; color:#555; padding:2px 0; }
-  td { padding:3px 0; vertical-align:top; }
-  td.r { text-align:right; white-space:nowrap; }
-  .total-row { font-weight:700; font-size:13px; border-top:1px solid #111; padding-top:4px; }
-  .footer { font-size:10px; color:#777; text-align:center; margin-top:12px; }
-  button { display:block; margin:12px auto 0; padding:8px 24px; background:#111; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:12px; }
-  @media print { button { display:none !important; } }
-</style></head><body>
-<div class="center">
-  ${venta.logo_url ? `<img src="${venta.logo_url}" class="logo" alt="">` : ""}
-  <h1>${venta.negocio_nombre || "Ticket de venta"}</h1>
-  ${venta.negocio_direccion ? `<div class="sub">${venta.negocio_direccion}</div>` : ""}
-  ${venta.negocio_telefono ? `<div class="sub">Tel: ${venta.negocio_telefono}</div>` : ""}
-</div>
-<hr class="sep">
-<div style="font-size:11px">
-  <div><b>Folio:</b> ${venta.folio}</div>
-  <div><b>Fecha:</b> ${fmtD(venta.fecha_local || venta.fecha)}</div>
-  <div><b>Hora:</b> ${fmtH(venta.fecha_local || venta.fecha)}</div>
-  <div><b>Cliente:</b> ${venta.cliente_nombre || "Cliente general"}</div>
-  <div><b>Cajero:</b> ${venta.cajero_nombre || "—"}</div>
-  <div><b>Pago:</b> <span style="text-transform:capitalize">${venta.metodo_pago}</span></div>
-</div>
-<hr class="sep">
-<table>
-  <thead><tr><th>Producto</th><th class="r">Cant</th><th class="r">P.U.</th><th class="r">Importe</th></tr></thead>
-  <tbody>
-    ${(venta.items || []).map(i => `
-      <tr>
-        <td>${i.producto_nombre}${i.producto_medida ? `<br><span style="font-size:10px;color:#555">${i.producto_medida}</span>` : ""}</td>
-        <td class="r">${parseFloat(i.cantidad)}</td>
-        <td class="r">$${parseFloat(i.precio_unitario).toFixed(2)}</td>
-        <td class="r">$${parseFloat(i.subtotal).toFixed(2)}</td>
-      </tr>`).join("")}
-  </tbody>
-</table>
-<hr class="sep">
-<table>
-  <tr><td>Subtotal</td><td class="r">$${parseFloat(venta.subtotal || 0).toFixed(2)}</td></tr>
-  ${tieneDesc ? `<tr><td>Descuento</td><td class="r">-$${parseFloat(venta.descuento).toFixed(2)}</td></tr>` : ""}
-  ${tieneIva  ? `<tr><td>IVA 16%</td><td class="r">$${parseFloat(venta.iva).toFixed(2)}</td></tr>` : ""}
-  <tr class="total-row"><td>TOTAL</td><td class="r">$${parseFloat(venta.total).toFixed(2)}</td></tr>
-  ${parseFloat(venta.cambio || 0) > 0 ? `<tr><td style="color:#059669">Cambio</td><td class="r" style="color:#059669">$${parseFloat(venta.cambio).toFixed(2)}</td></tr>` : ""}
-</table>
-${venta.notas ? `<hr class="sep"><div style="font-size:10px;color:#555">Nota: ${venta.notas}</div>` : ""}
-<div class="footer">¡Gracias por su compra!<br>${venta.negocio_nombre || ""}</div>
-<button onclick="window.print()">🖨 Imprimir ticket</button>
-</body></html>`;
-
-    const w = window.open("", "_blank", "width=380,height=700");
-    w.document.write(html); w.document.close(); w.focus();
-  };
-
-  return (
-    <div style={overlayStyle}>
-      <div style={{ ...modalBase, maxWidth: 540 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
-            🧾 {venta ? venta.folio : "Cargando ticket..."}
-          </h2>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--color-text-secondary)" }}>✕</button>
-        </div>
-
-        {loading && <div style={{ textAlign: "center", padding: 40, color: "var(--color-text-secondary)" }}>Cargando...</div>}
-        {error && <div style={{ background: "#FEE2E2", color: "#B91C1C", borderRadius: 8, padding: "10px 14px", fontSize: 13 }}>{error}</div>}
-
-        {venta && (
-          <>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16, fontSize: 13 }}>
-              <div style={{ background: "var(--color-background-secondary)", borderRadius: 8, padding: "10px 14px" }}>
-                <div style={{ fontSize: 10, color: "var(--color-text-secondary)", textTransform: "uppercase", marginBottom: 2 }}>Fecha / Hora</div>
-                <div style={{ fontWeight: 600 }}>{new Date(venta.fecha_local || venta.fecha).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" })}</div>
-                <div style={{ color: "var(--color-text-secondary)", fontSize: 11 }}>{new Date(venta.fecha_local || venta.fecha).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}</div>
-              </div>
-              <div style={{ background: "var(--color-background-secondary)", borderRadius: 8, padding: "10px 14px" }}>
-                <div style={{ fontSize: 10, color: "var(--color-text-secondary)", textTransform: "uppercase", marginBottom: 2 }}>Cliente / Cajero</div>
-                <div style={{ fontWeight: 600 }}>{venta.cliente_nombre || "Cliente general"}</div>
-                <div style={{ color: "var(--color-text-secondary)", fontSize: 11 }}>{venta.cajero_nombre}</div>
-              </div>
-            </div>
-
-            <div style={{ background: "var(--color-background-secondary)", borderRadius: 10, border: "1px solid var(--color-border-tertiary)", marginBottom: 14, overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                <thead><tr style={{ background: "var(--color-background-tertiary)" }}>
-                  {["Producto", "Cant.", "P.U.", "Importe"].map((h, i) =>
-                    <th key={h} style={{ padding: "8px 12px", textAlign: i > 1 ? "right" : "left", fontSize: 10, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase" }}>{h}</th>)}
-                </tr></thead>
-                <tbody>
-                  {(venta.items || []).map((item, i) => (
-                    <tr key={i} style={{ borderTop: "1px solid var(--color-border-tertiary)" }}>
-                      <td style={{ padding: "8px 12px" }}>
-                        <div style={{ fontWeight: 600, fontSize: 12 }}>{item.producto_nombre}</div>
-                        {item.producto_medida && <div style={{ fontSize: 10, color: "var(--color-text-secondary)" }}>{item.producto_medida}</div>}
-                      </td>
-                      <td style={{ padding: "8px 12px", textAlign: "right" }}>{parseFloat(item.cantidad)}</td>
-                      <td style={{ padding: "8px 12px", textAlign: "right", color: "var(--color-text-secondary)" }}>{fmt(item.precio_unitario)}</td>
-                      <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 600 }}>{fmt(item.subtotal)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div style={{ background: "var(--color-background-tertiary)", borderRadius: 8, padding: "10px 14px", marginBottom: 14 }}>
-              {parseFloat(venta.descuento || 0) > 0 && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 4 }}><span style={{ color: "var(--color-text-secondary)" }}>Descuento</span><span style={{ color: "#059669" }}>-{fmt(venta.descuento)}</span></div>}
-              {parseFloat(venta.iva || 0) > 0 && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 4 }}><span style={{ color: "var(--color-text-secondary)" }}>IVA 16%</span><span>{fmt(venta.iva)}</span></div>}
-              <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800, fontSize: 18 }}>
-                <span>Total</span><span style={{ color: "#60A5FA" }}>{fmt(venta.total)}</span>
-              </div>
-              {parseFloat(venta.cambio || 0) > 0 && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginTop: 4 }}><span style={{ color: "#059669" }}>Cambio entregado</span><span style={{ color: "#059669", fontWeight: 600 }}>{fmt(venta.cambio)}</span></div>}
-            </div>
-
-            {venta.notas && <div style={{ fontSize: 12, color: "var(--color-text-secondary)", background: "var(--color-background-secondary)", borderRadius: 6, padding: "8px 12px", marginBottom: 14 }}>📝 {venta.notas}</div>}
-
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-              <button onClick={onClose} style={{ padding: "9px 18px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13 }}>Cerrar</button>
-              <button onClick={imprimir} style={{ padding: "9px 20px", background: "#111", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>🖨 Imprimir ticket</button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function HistorialVentas() {
   const [desde, setDesde] = useState(hoyISO());
   const [hasta, setHasta] = useState(hoyISO());
   const [ventas, setVentas] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [ticketId, setTicketId] = useState(null);
 
   const cargar = useCallback(() => {
     setLoading(true);
@@ -3157,29 +2562,38 @@ function HistorialVentas() {
       </div>
 
       <div style={{ display: "flex", gap: 16, marginBottom: 16, flexWrap: "wrap" }}>
-        {[["Ventas pagadas", totales.pagadas, "var(--color-text-primary)", v => v],
-          ["Total cobrado", totales.total, "#1D4ED8", fmt],
-          ["Efectivo", totales.efectivo || 0, "var(--color-text-primary)", fmt],
-          ["Tarjeta", totales.tarjeta || 0, "var(--color-text-primary)", fmt],
-          ["Transferencia", totales.transferencia || 0, "var(--color-text-primary)", fmt],
-        ].map(([label, val, color, f]) => (
-          <div key={label} style={{ background: "var(--color-background-secondary)", borderRadius: 10, padding: "12px 18px", border: "1px solid var(--color-border-tertiary)" }}>
-            <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>{label}</div>
-            <div style={{ fontSize: 18, fontWeight: 700, color }}>{f(val)}</div>
-          </div>
-        ))}
+        <div style={{ background: "var(--color-background-secondary)", borderRadius: 10, padding: "12px 18px", border: "1px solid var(--color-border-tertiary)" }}>
+          <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Ventas pagadas</div>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>{totales.pagadas}</div>
+        </div>
+        <div style={{ background: "var(--color-background-secondary)", borderRadius: 10, padding: "12px 18px", border: "1px solid var(--color-border-tertiary)" }}>
+          <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Total cobrado</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: "#1D4ED8" }}>{fmt(totales.total)}</div>
+        </div>
+        <div style={{ background: "var(--color-background-secondary)", borderRadius: 10, padding: "12px 18px", border: "1px solid var(--color-border-tertiary)" }}>
+          <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Efectivo</div>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>{fmt(totales.efectivo || 0)}</div>
+        </div>
+        <div style={{ background: "var(--color-background-secondary)", borderRadius: 10, padding: "12px 18px", border: "1px solid var(--color-border-tertiary)" }}>
+          <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Tarjeta</div>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>{fmt(totales.tarjeta || 0)}</div>
+        </div>
+        <div style={{ background: "var(--color-background-secondary)", borderRadius: 10, padding: "12px 18px", border: "1px solid var(--color-border-tertiary)" }}>
+          <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Transferencia</div>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>{fmt(totales.transferencia || 0)}</div>
+        </div>
       </div>
 
       {loading ? <div style={{ textAlign: "center", padding: 40, color: "var(--color-text-secondary)" }}>Cargando...</div> : (
         <div style={{ background: "var(--color-background-secondary)", borderRadius: 12, border: "1px solid var(--color-border-tertiary)", overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead><tr style={{ background: "var(--color-background-tertiary)" }}>
-              {["Folio", "Hora", "Cliente", "Cajero", "Método", "Notas", "Total", "Estado", ""].map(h =>
-                <th key={h} style={{ padding: "10px 14px", textAlign: h === "Total" ? "right" : "left", fontWeight: 600, fontSize: 11, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{h}</th>)}
+              {["Folio", "Hora", "Cliente", "Cajero", "Método de pago", "Notas", "Total", "Estado"].map(h =>
+                <th key={h} style={{ padding: "10px 14px", textAlign: (h === "Total") ? "right" : "left", fontWeight: 600, fontSize: 11, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{h}</th>)}
             </tr></thead>
             <tbody>
               {ventas.length === 0
-                ? <tr><td colSpan={9} style={{ padding: 40, textAlign: "center", color: "var(--color-text-secondary)" }}>No hay ventas en este rango de fechas.</td></tr>
+                ? <tr><td colSpan={8} style={{ padding: 40, textAlign: "center", color: "var(--color-text-secondary)" }}>No hay ventas en este rango de fechas.</td></tr>
                 : ventas.map(v => {
                   const estadoInfo = ESTADO_VENTA_INFO[v.estado] || ESTADO_VENTA_INFO.pagada;
                   return (
@@ -3189,12 +2603,9 @@ function HistorialVentas() {
                       <td style={{ padding: "10px 14px" }}>{v.cliente_nombre || "Cliente general"}</td>
                       <td style={{ padding: "10px 14px", color: "var(--color-text-secondary)" }}>{v.cajero_nombre || "—"}</td>
                       <td style={{ padding: "10px 14px", textTransform: "capitalize" }}>{v.metodo_pago}</td>
-                      <td style={{ padding: "10px 14px", color: "var(--color-text-secondary)", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.notas || "—"}</td>
+                      <td style={{ padding: "10px 14px", color: "var(--color-text-secondary)", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.notas || "—"}</td>
                       <td style={{ padding: "10px 14px", textAlign: "right", fontWeight: 700, color: "#1D4ED8" }}>{fmt(v.total)}</td>
                       <td style={{ padding: "10px 14px" }}><span style={{ background: estadoInfo.bg, color: estadoInfo.color, fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20 }}>{estadoInfo.label}</span></td>
-                      <td style={{ padding: "8px 14px" }}>
-                        <button onClick={() => setTicketId(v.id)} style={{ padding: "5px 12px", background: "var(--color-background-tertiary)", border: "1px solid var(--color-border-secondary)", borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }}>🧾 Ver</button>
-                      </td>
                     </tr>
                   );
                 })}
@@ -3202,8 +2613,6 @@ function HistorialVentas() {
           </table>
         </div>
       )}
-
-      {ticketId && <ModalTicket ventaId={ticketId} onClose={() => setTicketId(null)} />}
     </div>
   );
 }
@@ -3284,138 +2693,6 @@ function Cotizaciones() {
                 );
               })}
             </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Reporte de inventario actual ────────────────────────────────────────────
-function ReporteInventarioActual() {
-  const [data, setData]     = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    api.reporteInventario()
-      .then(r => setData(r.data || []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
-
-  // Exportar como CSV (Excel lo abre nativamente)
-  const exportarExcel = () => {
-    const BOM  = '\uFEFF';
-    const cols = ['SKU','Nombre','Medida','Marca','Categoría','Stock','Stock mín.','Precio venta','Precio compra','Valor inventario','Total vendido'];
-    const filas = data.map(p => [
-      p.sku || '', p.nombre, p.medida || '', p.marca || '',
-      p.categoria || '', p.stock_actual, p.stock_minimo,
-      p.precio_venta, p.precio_compra || 0,
-      (parseFloat(p.stock_actual) * parseFloat(p.precio_venta)).toFixed(2),
-      p.total_vendido || 0,
-    ]);
-    const totValor = data.reduce((s,p) => s + parseFloat(p.stock_actual)*parseFloat(p.precio_venta), 0);
-    filas.push(['','','','','','','','','TOTAL', totValor.toFixed(2), '']);
-    const csv = BOM + [cols, ...filas].map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
-    const a   = document.createElement('a');
-    a.href    = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
-    a.download = `inventario_${new Date().toLocaleDateString('es-MX').replace(/\//g,'-')}.csv`;
-    a.click();
-  };
-
-  // Exportar como PDF (ventana imprimible)
-  const exportarPDF = () => {
-    const totValor = data.reduce((s,p) => s + parseFloat(p.stock_actual)*parseFloat(p.precio_venta), 0);
-    const totUnid  = data.reduce((s,p) => s + parseFloat(p.stock_actual), 0);
-    const filas    = data.map(p => `
-      <tr>
-        <td>${p.nombre}${p.medida ? ` <span style="color:#666;font-size:10px">${p.medida}</span>` : ''}</td>
-        <td>${p.marca || '—'}</td>
-        <td>${p.categoria || '—'}</td>
-        <td style="text-align:right">${parseFloat(p.stock_actual)}</td>
-        <td style="text-align:right">$${parseFloat(p.precio_venta).toFixed(2)}</td>
-        <td style="text-align:right;font-weight:600">$${(parseFloat(p.stock_actual)*parseFloat(p.precio_venta)).toFixed(2)}</td>
-        <td style="text-align:right;color:#555">${p.total_vendido || 0}</td>
-      </tr>`).join('');
-    const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
-    <title>Inventario actual</title>
-    <style>
-      *{margin:0;padding:0;box-sizing:border-box}
-      body{font-family:Arial,sans-serif;font-size:11px;padding:20px}
-      h1{font-size:16px;margin-bottom:4px} .sub{font-size:11px;color:#666;margin-bottom:16px}
-      table{width:100%;border-collapse:collapse}
-      th{background:#f0f0f0;padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase}
-      td{padding:5px 8px;border-bottom:1px solid #eee;vertical-align:top}
-      .total{font-weight:700;background:#f8f8f8}
-      button{margin-top:16px;padding:8px 20px;background:#111;color:#fff;border:none;border-radius:4px;cursor:pointer}
-      @media print{button{display:none}}
-    </style></head><body>
-    <h1>📦 Inventario actual</h1>
-    <div class="sub">Generado el ${new Date().toLocaleString('es-MX',{timeZone:'America/Mexico_City'})} · ${data.length} producto(s) con existencia</div>
-    <table>
-      <thead><tr><th>Producto</th><th>Marca</th><th>Categoría</th><th style="text-align:right">Stock</th><th style="text-align:right">P. Venta</th><th style="text-align:right">Valor</th><th style="text-align:right">Vendido</th></tr></thead>
-      <tbody>${filas}</tbody>
-      <tfoot><tr class="total"><td colspan="3">TOTALES</td><td style="text-align:right">${totUnid.toFixed(0)}</td><td></td><td style="text-align:right">$${totValor.toFixed(2)}</td><td></td></tr></tfoot>
-    </table>
-    <button onclick="window.print()">🖨 Imprimir / Guardar PDF</button>
-    </body></html>`;
-    const w = window.open('','_blank','width=900,height=700');
-    w.document.write(html); w.document.close(); w.focus();
-  };
-
-  const totValor = data.reduce((s,p) => s + parseFloat(p.stock_actual)*parseFloat(p.precio_venta), 0);
-  const totUnid  = data.reduce((s,p) => s + parseFloat(p.stock_actual), 0);
-
-  return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
-        <div style={{ display: "flex", gap: 16 }}>
-          <div><span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Productos con stock</span><div style={{ fontWeight: 700, fontSize: 18 }}>{data.length}</div></div>
-          <div><span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Unidades totales</span><div style={{ fontWeight: 700, fontSize: 18 }}>{totUnid.toFixed(0)}</div></div>
-          <div><span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Valor total inventario</span><div style={{ fontWeight: 700, fontSize: 18, color: "#60A5FA" }}>{fmt(totValor)}</div></div>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={exportarExcel} style={{ padding: "8px 16px", background: "#059669", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>📊 Excel / CSV</button>
-          <button onClick={exportarPDF}   style={{ padding: "8px 16px", background: "#111", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>🖨 PDF</button>
-        </div>
-      </div>
-
-      {loading ? <div style={{ textAlign: "center", padding: 40, color: "var(--color-text-secondary)" }}>Cargando inventario...</div> : (
-        <div style={{ background: "var(--color-background-secondary)", borderRadius: 12, border: "1px solid var(--color-border-tertiary)", overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-            <thead><tr style={{ background: "var(--color-background-tertiary)" }}>
-              {["Producto","Medida","Marca","Categoría","Stock","P. Venta","Valor","Vendido"].map((h,i) =>
-                <th key={h} style={{ padding: "10px 12px", textAlign: i>=4?"right":"left", fontSize: 11, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase" }}>{h}</th>)}
-            </tr></thead>
-            <tbody>
-              {data.length === 0
-                ? <tr><td colSpan={8} style={{ padding: 40, textAlign: "center", color: "var(--color-text-secondary)" }}>Sin productos con existencia</td></tr>
-                : data.map((p,i) => (
-                  <tr key={p.id} style={{ borderTop: "1px solid var(--color-border-tertiary)", background: p.stock_actual <= p.stock_minimo ? "rgba(239,68,68,0.04)" : "none" }}>
-                    <td style={{ padding: "9px 12px", fontWeight: 600 }}>
-                      {p.nombre}
-                      {p.stock_actual <= p.stock_minimo && <span style={{ marginLeft: 6, fontSize: 10, background: "#FEE2E2", color: "#B91C1C", borderRadius: 4, padding: "1px 5px" }}>⚠ Stock bajo</span>}
-                    </td>
-                    <td style={{ padding: "9px 12px", color: "var(--color-text-secondary)" }}>{p.medida || "—"}</td>
-                    <td style={{ padding: "9px 12px", color: "var(--color-text-secondary)" }}>{p.marca || "—"}</td>
-                    <td style={{ padding: "9px 12px", color: "var(--color-text-secondary)" }}>{p.categoria || "—"}</td>
-                    <td style={{ padding: "9px 12px", textAlign: "right", fontWeight: 700 }}>{parseFloat(p.stock_actual)}</td>
-                    <td style={{ padding: "9px 12px", textAlign: "right" }}>{fmt(p.precio_venta)}</td>
-                    <td style={{ padding: "9px 12px", textAlign: "right", fontWeight: 600, color: "#60A5FA" }}>{fmt(parseFloat(p.stock_actual)*parseFloat(p.precio_venta))}</td>
-                    <td style={{ padding: "9px 12px", textAlign: "right", color: "var(--color-text-secondary)" }}>{p.total_vendido || 0}</td>
-                  </tr>
-                ))
-              }
-            </tbody>
-            <tfoot>
-              <tr style={{ background: "var(--color-background-tertiary)", fontWeight: 700 }}>
-                <td colSpan={4} style={{ padding: "10px 12px", fontSize: 12 }}>TOTALES</td>
-                <td style={{ padding: "10px 12px", textAlign: "right" }}>{totUnid.toFixed(0)}</td>
-                <td></td>
-                <td style={{ padding: "10px 12px", textAlign: "right", color: "#60A5FA" }}>{fmt(totValor)}</td>
-                <td></td>
-              </tr>
-            </tfoot>
           </table>
         </div>
       )}
@@ -3572,8 +2849,8 @@ const NAV = [
 
   // ── CAJA ────────────────────────────────────────────────────────────────────
   { id: "ventas",             icon: "🛒", label: "Punto de venta",     permiso: "ventas",        sectionLabel: "CAJA" },
-  { id: "cortes_caja",        icon: "💰", label: "Cortes de caja",     permiso: "todo" },
-  { id: "historial_ventas",   icon: "🧾", label: "Historial",          permiso: "todo" },
+  { id: "cortes_caja",        icon: "💰", label: "Cortes de caja",     permiso: "ventas" },
+  { id: "historial_ventas",   icon: "🧾", label: "Historial",          permiso: "ventas" },
 
   // ── VENTAS ──────────────────────────────────────────────────────────────────
   { id: "credito",            icon: "💳", label: "Crédito / CxC",      permiso: "todo",          sectionLabel: "VENTAS" },
