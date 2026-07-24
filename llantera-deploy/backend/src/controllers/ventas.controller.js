@@ -186,3 +186,39 @@ export const actualizarMetodoPago = async (req, res) => {
     res.status(500).json({ error: 'Error al actualizar método de pago' });
   }
 };
+
+// Detalle de una venta por ID (para preview de ticket)
+export const obtener = async (req, res) => {
+  try {
+    const negocio_id = req.user.negocio_id;
+    const { rows: [venta] } = await query(
+      `SELECT v.*,
+              (v.fecha AT TIME ZONE 'America/Mexico_City') as fecha_local,
+              COALESCE(c.nombre, 'Cliente general') as cliente_nombre,
+              u.nombre as cajero_nombre,
+              n.nombre as negocio_nombre,
+              n.logo_url, n.telefono as negocio_telefono,
+              n.direccion as negocio_direccion
+       FROM ventas v
+       LEFT JOIN clientes c  ON v.cliente_id  = c.id
+       LEFT JOIN usuarios u  ON v.usuario_id  = u.id
+       JOIN negocios n       ON v.negocio_id  = n.id
+       WHERE v.id = $1 AND v.negocio_id = $2`,
+      [req.params.id, negocio_id]
+    );
+    if (!venta) return res.status(404).json({ error: 'Venta no encontrada' });
+
+    const { rows: items } = await query(
+      `SELECT vd.cantidad, vd.precio_unitario, vd.subtotal,
+              p.nombre as producto_nombre, p.medida as producto_medida
+       FROM ventas_detalle vd
+       JOIN productos p ON vd.producto_id = p.id
+       WHERE vd.venta_id = $1 ORDER BY p.nombre`,
+      [venta.id]
+    );
+    res.json({ ...venta, items });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al obtener detalle de la venta' });
+  }
+};
