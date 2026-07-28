@@ -3,7 +3,12 @@ import api from "./api";
 
 // ─── Utilidades ───────────────────────────────────────────────────────────────
 const fmt = (n) => `$${Number(n || 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const fmtFecha = (f) => f ? new Date(f).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" }) : "—";
+const fmtFecha = (f) => {
+  if (!f) return "—";
+  const s = typeof f === "string" ? f : new Date(f).toISOString();
+  const [y, m, d] = s.substring(0, 10).split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" });
+};
 
 const ESTADO_COLORES = {
   en_espera:  { bg: "#FEF3C7", color: "#92400E", label: "En espera" },
@@ -2504,7 +2509,9 @@ function Ventas() {
               <label style={labelStyle}>Fecha de la venta</label>
               <input type="date" style={inputStyle} max={hoyISO()} value={fechaVenta} onChange={e => setFechaVenta(e.target.value)} />
               {fechaVenta && fechaVenta !== hoyISO() && (
-                <div style={{ fontSize: 11, color: "#D97706", marginTop: 4 }}>⚠ Se registrará con fecha {fmtFecha(fechaVenta)}</div>
+                <div style={{ fontSize: 11, color: "#fff", marginTop: 4 }}>
+                  ⚠ Se registrará con fecha {(() => { const [y,m,d] = fechaVenta.split("-"); return `${parseInt(d)} ${["","ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"][parseInt(m)]} ${y}`; })()}
+                </div>
               )}
             </div>
           </div>
