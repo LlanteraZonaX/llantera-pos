@@ -208,6 +208,25 @@ export const detalle = async (req, res) => {
     };
 
     // Últimas ventas del turno
+    // Productos vendidos durante el turno (agrupados por producto)
+    const { rows: productosTurno } = await query(
+      `SELECT
+         p.nombre, p.medida,
+         SUM(vd.cantidad)  AS cantidad,
+         SUM(vd.subtotal)  AS total,
+         COUNT(DISTINCT v.id) AS num_ventas
+       FROM ventas_detalle vd
+       JOIN ventas    v  ON vd.venta_id   = v.id
+       JOIN productos p  ON vd.producto_id = p.id
+       WHERE v.negocio_id = $1
+         AND v.created_at >= $2
+         AND v.created_at <= COALESCE($3::timestamptz, NOW())
+         AND v.estado = 'pagada'
+       GROUP BY p.id, p.nombre, p.medida
+       ORDER BY cantidad DESC`,
+      [negocio_id, corte.fecha_apertura, corte.fecha_cierre]
+    );
+
     const { rows: ultimas } = await query(
       `SELECT v.folio, (v.fecha AT TIME ZONE 'America/Mexico_City') AS fecha_local,
               v.total, v.metodo_pago, v.descuento,
@@ -222,7 +241,7 @@ export const detalle = async (req, res) => {
       [negocio_id, corte.fecha_apertura, corte.fecha_cierre]
     );
 
-    res.json({ ...corte, resumen_ventas: ventas[0], resumen_gastos, ultimas_ventas: ultimas });
+    res.json({ ...corte, resumen_ventas: ventas[0], resumen_gastos, productos_turno: productosTurno, ultimas_ventas: ultimas });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error al obtener detalle del corte' });

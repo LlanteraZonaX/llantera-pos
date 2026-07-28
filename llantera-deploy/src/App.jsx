@@ -1108,18 +1108,23 @@ ${(rg.detalle||[]).length > 0 ? `
 
 <div class="resultado">${diffLabel}</div>
 
-${(d.ultimas_ventas || []).length > 0 ? `
+${(d.productos_turno || []).length > 0 ? `
 <div class="seccion">
-  <h2>Detalle de ventas del turno</h2>
-  <table><thead><tr><th>Folio</th><th>Hora</th><th>Cliente</th><th>Método</th><th style="text-align:right">Total</th></tr></thead><tbody>
-  ${(d.ultimas_ventas || []).map(v => `<tr>
-    <td>${v.folio}</td>
-    <td>${new Date(v.fecha_local).toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"})}</td>
-    <td>${v.cliente_nombre}</td>
-    <td style="text-transform:capitalize">${v.metodo_pago}</td>
-    <td style="text-align:right;font-weight:600">$${parseFloat(v.total).toFixed(2)}</td>
+  <h2>Productos vendidos en el turno</h2>
+  <table><thead><tr><th>Producto</th><th>Medida</th><th style="text-align:right">Cant.</th><th style="text-align:right">Total</th></tr></thead><tbody>
+  ${(d.productos_turno || []).map(p => `<tr>
+    <td style="font-weight:600">${p.nombre}</td>
+    <td style="color:#555">${p.medida || '—'}</td>
+    <td style="text-align:right">${parseFloat(p.cantidad)}</td>
+    <td style="text-align:right;font-weight:600">$${parseFloat(p.total).toFixed(2)}</td>
   </tr>`).join("")}
-  </tbody></table>
+  </tbody>
+  <tfoot><tr style="border-top:2px solid #ccc;font-weight:700">
+    <td colspan="2">TOTAL</td>
+    <td style="text-align:right">${(d.productos_turno||[]).reduce((s,p)=>s+parseFloat(p.cantidad),0)}</td>
+    <td style="text-align:right">$${parseFloat(d.resumen_ventas?.total_ventas||0).toFixed(2)}</td>
+  </tr></tfoot>
+  </table>
 </div>` : ""}
 
 <div style="text-align:center;margin:16px 0">
