@@ -200,7 +200,7 @@ try {
       `SELECT id FROM productos WHERE negocio_id=$1 AND nombre=$2 AND COALESCE(medida,'')=$3 LIMIT 1`,
       [NID, p.nombre, p.medida||'']
     );
-    if (ex) { prodMap[key] = ex.id; continue; }
+    if (ex) { prodMap[key] = { id: ex.id, desc: `${p.nombre}${p.medida ? ' ' + p.medida : ''}` }; continue; }
 
     const sku = `DEMO-${p.nombre.replace(/\s+/g,'').substring(0,5)}-${(p.medida||'SVC').replace(/[^A-Z0-9]/gi,'').substring(0,6)}`.toUpperCase();
     const pid = uuid();
@@ -214,7 +214,7 @@ try {
       `SELECT id FROM productos WHERE negocio_id=$1 AND nombre=$2 AND COALESCE(medida,'')=$3 LIMIT 1`,
       [NID,p.nombre,p.medida||'']
     );
-    if (conf) { prodMap[key] = conf.id; prodCreados++; }
+    if (conf) { prodMap[key] = { id: conf.id, desc: `${p.nombre}${p.medida ? ' ' + p.medida : ''}` }; prodCreados++; }
   }
   console.log(`✅  ${prodCreados} producto(s) creado(s)`);
 
@@ -278,12 +278,12 @@ try {
       const items = [];
       let subtotal = 0;
       for (const pv of prods) {
-        const pid = prodMap[pv.key];
-        if (!pid) continue;
+        const prod = prodMap[pv.key];
+        if (!prod) continue;
         const cant = pv.key.startsWith('LLANTA') ? rndN(1,2) : rndN(1,4);
         const linea = fmt2(cant * pv.pv);
         subtotal += linea;
-        items.push({ pid, cant, precio: pv.pv, linea });
+        items.push({ pid: prod.id, desc: prod.desc, cant, precio: pv.pv, linea });
       }
       if (!items.length) continue;
 
@@ -307,13 +307,15 @@ try {
          subtotal, metodo, subtotal]
       );
 
-      // INSERT ventas_detalle SIN "subtotal" — es GENERATED ALWAYS AS ((cantidad*precio_unitario)-descuento)
-      // PostgreSQL lo calcula automáticamente. Solo insertamos cantidad y precio_unitario.
+      // INSERT ventas_detalle:
+      //   - SIN subtotal (GENERATED ALWAYS AS ((cantidad*precio_unitario)-descuento))
+      //   - CON descripcion (NOT NULL confirmado)
+      //   - CON descuento=0 (referenciado en la expresión GENERATED, puede ser NOT NULL)
       for (const it of items) {
         await client.query(
-          `INSERT INTO ventas_detalle (venta_id,producto_id,cantidad,precio_unitario)
-           VALUES ($1,$2,$3,$4)`,
-          [ventaId, it.pid, it.cant, it.precio]
+          `INSERT INTO ventas_detalle (venta_id,producto_id,descripcion,cantidad,precio_unitario,descuento)
+           VALUES ($1,$2,$3,$4,$5,0)`,
+          [ventaId, it.pid, it.desc, it.cant, it.precio]
         );
       }
       ventasCreadas++;
