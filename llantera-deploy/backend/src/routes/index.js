@@ -80,6 +80,8 @@ r.get ('/reportes/utilidad',              authenticate, reportes.utilidadBruta);
 r.get ('/reportes/producto-mas-vendido',  authenticate, reportes.productoMasVendido);
 r.get ('/reportes/cotizaciones-vendedor', authenticate, reportes.cotizacionesPorVendedor);
 r.get ('/reportes/llantas-mes',           authenticate, reportes.llantasPorMes);
+r.get ('/reportes/inventario',            authenticate, reportes.inventarioActual);
+r.get ('/reportes/producto/:producto_id/ventas', authenticate, reportes.ventasPorProducto);
 
 // ── Cotizaciones ──────────────────────────────────────────────────────────────
 r.get ('/cotizaciones',                   authenticate, cotizaciones.listar);

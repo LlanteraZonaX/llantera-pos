@@ -181,6 +181,12 @@ export const api = {
   // Reportes
   reporteVentas: (params = '') =>
     fetch(`${BASE}/reportes/ventas?${params}`, { headers: headers() }).then(handle),
+  reporteInventario: () =>
+    fetch(`${BASE}/reportes/inventario`, { headers: headers() }).then(handle),
+  ventasPorProducto: (producto_id) =>
+    fetch(`${BASE}/reportes/producto/${producto_id}/ventas`, { headers: headers() }).then(handle),
+  importarProductos: (productos) =>
+    fetch(`${BASE}/productos/importar`, { method: 'POST', headers: headers(), body: JSON.stringify({ productos }) }).then(handle),
   reporteProductoMasVendido: (params = '') =>
     fetch(`${BASE}/reportes/producto-mas-vendido?${params}`, { headers: headers() }).then(handle),
   reporteCotizacionesVendedor: (params = '') =>
