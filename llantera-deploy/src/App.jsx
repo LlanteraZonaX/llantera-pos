@@ -2415,6 +2415,150 @@ function Reportes() {
   );
 }
 
+// ─── Respaldos ────────────────────────────────────────────────────────────────
+function Respaldos() {
+  const [creando, setCreando]       = useState(false);
+  const [restaurando, setRestaurando] = useState(false);
+  const [msg, setMsg]               = useState(null);
+  const [error, setError]           = useState(null);
+  const [confirmText, setConfirmText] = useState('');
+  const [respaldoCargado, setRespaldoCargado] = useState(null);
+  const [paso, setPaso]             = useState('inicio'); // inicio | confirmar
+  const inputRef = useRef(null);
+
+  const descargarRespaldo = async () => {
+    setCreando(true); setMsg(null); setError(null);
+    try {
+      const datos = await api.crearRespaldo();
+      const nombre = `respaldo_${datos.negocio_nombre.replace(/\s+/g,'_')}_${new Date().toISOString().substring(0,10)}.json`;
+      const blob   = new Blob([JSON.stringify(datos, null, 2)], { type: 'application/json' });
+      const a      = document.createElement('a');
+      a.href       = URL.createObjectURL(blob);
+      a.download   = nombre;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      const total = Object.values(datos.tablas).reduce((s,n) => s + n, 0);
+      setMsg(`✅ Respaldo creado: ${nombre} — ${total} registros exportados`);
+    } catch (e) { setError(e.message); }
+    finally { setCreando(false); }
+  };
+
+  const cargarArchivo = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const datos = JSON.parse(ev.target.result);
+        if (!datos.version || !datos.negocio_id || !datos.datos)
+          throw new Error('Archivo no es un respaldo válido del sistema');
+        setRespaldoCargado(datos);
+        setPaso('confirmar');
+        setError(null);
+      } catch (e) { setError('Archivo inválido: ' + e.message); }
+    };
+    reader.readAsText(file);
+  };
+
+  const ejecutarRestauracion = async () => {
+    if (confirmText !== 'RESTAURAR') return;
+    setRestaurando(true); setError(null);
+    try {
+      const r = await api.restaurarRespaldo(respaldoCargado, 'RESTAURAR');
+      setMsg(`✅ ${r.mensaje} (respaldo del ${new Date(r.fecha_respaldo).toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })})`);
+      setPaso('inicio'); setRespaldoCargado(null); setConfirmText('');
+    } catch (e) { setError(e.message); }
+    finally { setRestaurando(false); }
+  };
+
+  return (
+    <div style={{ maxWidth: 640 }}>
+      <h2 style={{ margin: '0 0 6px', fontSize: 20, fontWeight: 700 }}>💾 Respaldos</h2>
+      <p style={{ color: 'var(--color-text-secondary)', fontSize: 13, margin: '0 0 24px' }}>
+        Crea una copia de seguridad de todos tus datos o restaura desde un respaldo anterior.
+        Solo visible para el Administrador.
+      </p>
+
+      {msg   && <div style={{ background: 'rgba(5,150,105,0.12)', border: '1px solid #059669', borderRadius: 10, padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#34D399' }}>{msg}</div>}
+      {error && <div style={{ background: 'rgba(185,28,28,0.1)', border: '1px solid #B91C1C', borderRadius: 10, padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#F87171' }}>❌ {error}</div>}
+
+      {/* Crear respaldo */}
+      <div style={{ background: 'var(--color-background-secondary)', borderRadius: 14, border: '1px solid var(--color-border-tertiary)', padding: 24, marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
+          <div style={{ fontSize: 36, flexShrink: 0 }}>📥</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>Crear respaldo</div>
+            <p style={{ color: 'var(--color-text-secondary)', fontSize: 13, margin: '0 0 14px' }}>
+              Descarga un archivo <strong>.json</strong> con todos los productos, ventas, clientes,
+              compras, gastos y configuración del negocio. Guárdalo en un lugar seguro.
+            </p>
+            <button onClick={descargarRespaldo} disabled={creando} style={{ padding: '10px 24px', background: '#1D4ED8', color: '#fff', border: 'none', borderRadius: 8, cursor: creando ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 700 }}>
+              {creando ? '⏳ Generando respaldo...' : '📥 Descargar respaldo ahora'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Restaurar respaldo */}
+      <div style={{ background: 'var(--color-background-secondary)', borderRadius: 14, border: '1px solid var(--color-border-tertiary)', padding: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
+          <div style={{ fontSize: 36, flexShrink: 0 }}>⏪</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>Restaurar respaldo</div>
+            <div style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid #F59E0B', borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 12, color: '#FBBF24' }}>
+              ⚠ <strong>ADVERTENCIA:</strong> Restaurar reemplaza TODOS los datos actuales con los del respaldo.
+              Esta acción no se puede deshacer. Crea un respaldo nuevo antes de proceder.
+            </div>
+
+            {paso === 'inicio' && (
+              <>
+                <p style={{ color: 'var(--color-text-secondary)', fontSize: 13, margin: '0 0 14px' }}>
+                  Selecciona el archivo <strong>.json</strong> generado previamente por este sistema.
+                </p>
+                <input ref={inputRef} type="file" accept=".json" style={{ display: 'none' }} onChange={cargarArchivo} />
+                <button onClick={() => inputRef.current?.click()} style={{ padding: '10px 24px', background: '#7C3AED', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>
+                  📂 Seleccionar archivo de respaldo
+                </button>
+              </>
+            )}
+
+            {paso === 'confirmar' && respaldoCargado && (
+              <div>
+                <div style={{ background: 'rgba(124,58,237,0.1)', borderRadius: 8, padding: '12px 16px', marginBottom: 16 }}>
+                  <div style={{ fontWeight: 600, marginBottom: 4 }}>Respaldo seleccionado:</div>
+                  <div style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>
+                    <div>📅 Fecha: {new Date(respaldoCargado.fecha).toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })}</div>
+                    <div>🏢 Negocio: {respaldoCargado.negocio_nombre}</div>
+                    <div>📊 Tablas: {Object.entries(respaldoCargado.tablas).map(([k,v]) => `${k}: ${v}`).join(', ')}</div>
+                  </div>
+                </div>
+                <p style={{ fontSize: 13, margin: '0 0 10px' }}>
+                  Para confirmar, escribe <strong>RESTAURAR</strong> en el campo:
+                </p>
+                <input
+                  style={{ ...{padding:'10px 14px', borderRadius:8, border:'2px solid #B91C1C', background:'var(--color-background-primary)', color:'#fff', fontSize:14, width:'100%', marginBottom:12, boxSizing:'border-box'} }}
+                  placeholder="Escribe RESTAURAR para confirmar"
+                  value={confirmText}
+                  onChange={e => setConfirmText(e.target.value.toUpperCase())}
+                />
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button onClick={() => { setPaso('inicio'); setRespaldoCargado(null); setConfirmText(''); }} style={{ padding: '10px 18px', border: '1px solid var(--color-border-secondary)', borderRadius: 8, background: 'none', color: '#fff', cursor: 'pointer', fontSize: 13 }}>
+                    Cancelar
+                  </button>
+                  <button onClick={ejecutarRestauracion} disabled={confirmText !== 'RESTAURAR' || restaurando}
+                    style={{ padding: '10px 24px', background: confirmText === 'RESTAURAR' ? '#B91C1C' : 'var(--color-background-tertiary)', color: '#fff', border: 'none', borderRadius: 8, cursor: confirmText === 'RESTAURAR' ? 'pointer' : 'not-allowed', fontSize: 13, fontWeight: 700 }}>
+                    {restaurando ? '⏳ Restaurando...' : '⏪ Restaurar ahora'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Configuracion() {
   const [datos, setDatos] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -3659,6 +3803,7 @@ const NAV = [
   { id: "catalogos",          icon: "🗂️",  label: "Catálogos",          permiso: "todo",          sectionLabel: "ADMIN" },
   { id: "usuarios",           icon: "🔐", label: "Usuarios",           permiso: "todo" },
   { id: "configuracion",      icon: "🏢", label: "Configuración",      permiso: "todo" },
+  { id: "respaldos",          icon: "💾", label: "Respaldos",           permiso: "todo" },
 ];
 
 // Lista "plana" de secciones reales (hijos de un grupo, o el ítem mismo si no
@@ -3939,6 +4084,7 @@ function AppPrivada() {
         {seccionActiva === "reportes"    && <Reportes />}
         {seccionActiva === "usuarios"    && <Usuarios />}
         {seccionActiva === "configuracion" && <Configuracion />}
+        {seccionActiva === "respaldos"     && <Respaldos />}
       </main>
 
       {/* Modales */}

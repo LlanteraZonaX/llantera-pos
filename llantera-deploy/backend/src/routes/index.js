@@ -8,6 +8,7 @@ import { uploadFoto }   from '../middleware/upload.js';
 import * as compras     from '../controllers/compras.controller.js';
 import * as gastos      from '../controllers/gastos.controller.js';
 import * as ventas      from '../controllers/ventas.controller.js';
+import * as respaldo    from '../controllers/respaldo.controller.js';
 import * as ordenes     from '../controllers/ordenes.controller.js';
 import * as reportes    from '../controllers/reportes.controller.js';
 import * as cotizaciones from '../controllers/cotizaciones.controller.js';
@@ -97,6 +98,10 @@ r.post('/usuarios',                       authenticate, authorize('admin'), usua
 r.put ('/usuarios/:id',                   authenticate, authorize('admin'), usuarios.actualizar);
 r.delete('/usuarios/:id',                 authenticate, authorize('admin'), usuarios.eliminar);
 r.post('/usuarios/:id/reset-password',    authenticate, authorize('admin'), usuarios.resetPassword);
+
+// ── Respaldo y restauración (solo admin) ─────────────────────────────────────
+r.post('/admin/respaldo',   authenticate, authorize('admin'), respaldo.crearRespaldo);
+r.post('/admin/restaurar',  authenticate, authorize('admin'), respaldo.restaurar);
 
 // ── Negocio ───────────────────────────────────────────────────────────────────
 r.get ('/negocio',                        authenticate, negocio.obtener);

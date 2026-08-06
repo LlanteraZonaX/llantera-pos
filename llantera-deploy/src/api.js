@@ -195,6 +195,10 @@ export const api = {
     fetch(`${BASE}/reportes/cotizaciones-vendedor?${params}`, { headers: headers() }).then(handle),
   reporteLlantasMes: (params = '') =>
     fetch(`${BASE}/reportes/llantas-mes?${params}`, { headers: headers() }).then(handle),
+  crearRespaldo: () =>
+    fetch(`${BASE}/admin/respaldo`, { method: 'POST', headers: headers() }).then(handle),
+  restaurarRespaldo: (respaldo, confirmacion) =>
+    fetch(`${BASE}/admin/restaurar`, { method: 'POST', headers: headers(), body: JSON.stringify({ respaldo, confirmacion }) }).then(handle),
 };
 
 export default api;
