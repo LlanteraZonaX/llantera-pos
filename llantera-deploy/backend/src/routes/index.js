@@ -66,6 +66,7 @@ r.get ('/ventas/resumen',                 authenticate, ventas.resumenDia);
 r.get ('/ventas/:id',                     authenticate, ventas.obtener);
 r.post('/ventas',                         authenticate, ventas.crear);
 r.patch('/ventas/:id/metodo-pago',        authenticate, ventas.actualizarMetodoPago);
+r.patch('/ventas/:id/marcar-pagada',      authenticate, ventas.marcarPagada);
 
 // ── Órdenes de servicio ───────────────────────────────────────────────────────
 r.get ('/ordenes',                        authenticate, ordenes.listar);

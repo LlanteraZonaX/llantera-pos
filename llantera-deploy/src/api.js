@@ -52,6 +52,8 @@ export const api = {
     fetch(`${BASE}/ventas/${id}`, { headers: headers() }).then(handle),
   actualizarMetodoPago: (id, metodo_pago) =>
     fetch(`${BASE}/ventas/${id}/metodo-pago`, { method: 'PATCH', headers: headers(), body: JSON.stringify({ metodo_pago }) }).then(handle),
+  marcarVentaPagada: (id, metodo_pago) =>
+    fetch(`${BASE}/ventas/${id}/marcar-pagada`, { method: 'PATCH', headers: headers(), body: JSON.stringify({ metodo_pago }) }).then(handle),
 
   // Compras
   compras: (params = '') =>

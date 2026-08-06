@@ -222,3 +222,26 @@ export const obtener = async (req, res) => {
     res.status(500).json({ error: 'Error al obtener detalle de la venta' });
   }
 };
+
+// Marcar una venta pendiente como pagada
+export const marcarPagada = async (req, res) => {
+  try {
+    const { metodo_pago = 'efectivo' } = req.body;
+    const metodos = ['efectivo', 'tarjeta', 'transferencia'];
+    if (!metodos.includes(metodo_pago))
+      return res.status(400).json({ error: 'Método de pago inválido' });
+
+    const { rows: [venta] } = await query(
+      `UPDATE ventas
+       SET estado = 'pagada', metodo_pago = $1, monto_pagado = total
+       WHERE id = $2 AND negocio_id = $3 AND estado = 'pendiente'
+       RETURNING id, folio, estado, total, metodo_pago`,
+      [metodo_pago, req.params.id, req.user.negocio_id]
+    );
+    if (!venta) return res.status(404).json({ error: 'Venta no encontrada o ya está pagada' });
+    res.json({ ...venta, mensaje: `Venta ${venta.folio} marcada como pagada` });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al actualizar la venta' });
+  }
+};

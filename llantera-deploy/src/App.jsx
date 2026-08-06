@@ -3240,7 +3240,20 @@ function HistorialVentas() {
                       <td style={{ padding: "10px 14px", textAlign: "right", fontWeight: 700, color: "#1D4ED8" }}>{fmt(v.total)}</td>
                       <td style={{ padding: "10px 14px" }}><span style={{ background: estadoInfo.bg, color: estadoInfo.color, fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20 }}>{estadoInfo.label}</span></td>
                       <td style={{ padding: "8px 14px" }}>
-                        <button onClick={() => setTicketId(v.id)} style={{ padding: "5px 12px", background: "var(--color-background-tertiary)", border: "1px solid var(--color-border-secondary)", borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 600, whiteSpace: "nowrap", color: "#fff" }}>🧾 Ver</button>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          {v.estado === "pendiente" && (
+                            <button onClick={async () => {
+                              if (!window.confirm(`¿Marcar VTA ${v.folio} como PAGADA en Efectivo?`)) return;
+                              try {
+                                await api.marcarVentaPagada(v.id, 'efectivo');
+                                cargar();
+                              } catch(e) { alert('Error: ' + e.message); }
+                            }} style={{ padding: "5px 10px", background: "#059669", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>
+                              ✓ Pagar
+                            </button>
+                          )}
+                          <button onClick={() => setTicketId(v.id)} style={{ padding: "5px 12px", background: "var(--color-background-tertiary)", border: "1px solid var(--color-border-secondary)", borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 600, whiteSpace: "nowrap", color: "#fff" }}>🧾 Ver</button>
+                        </div>
                       </td>
                     </tr>
                   );
