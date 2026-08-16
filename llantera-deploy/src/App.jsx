@@ -206,9 +206,88 @@ function ModalProducto({ producto, onClose, onSaved }) {
   );
 }
 
+// ─── Selector de Proveedor (scroll + crear al vuelo) ──────────────────────────
+// Reutilizable: se autoabastece de api.proveedores(), no depende de props del
+// padre más allá de value/onChange. Pensado para conectarse también en el
+// modal de Lotes (Recepción) más adelante, donde hoy solo hay texto libre.
+function SelectorProveedor({ proveedorId, proveedorNombre, onChange }) {
+  const [lista, setLista] = useState([]);
+  const [busqueda, setBusqueda] = useState(proveedorNombre || "");
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [cargando, setCargando] = useState(true);
+  const [creando, setCreando] = useState(false);
+
+  useEffect(() => {
+    api.proveedores()
+      .then(r => setLista(r.data || []))
+      .catch(() => {})
+      .finally(() => setCargando(false));
+  }, []);
+
+  const filtrados = busqueda.trim()
+    ? lista.filter(p => p.nombre.toLowerCase().includes(busqueda.trim().toLowerCase()))
+    : lista;
+
+  const hayCoincidenciaExacta = lista.some(p => p.nombre.toLowerCase() === busqueda.trim().toLowerCase());
+
+  const seleccionar = (prov) => {
+    setBusqueda(prov.nombre);
+    setShowDropdown(false);
+    onChange({ id: prov.id, nombre: prov.nombre });
+  };
+
+  const crearNuevo = async () => {
+    const nombre = busqueda.trim();
+    if (!nombre || creando) return;
+    setCreando(true);
+    try {
+      const nuevo = await api.crearProveedor({ nombre });
+      setLista(p => (p.some(x => x.id === nuevo.id) ? p : [...p, nuevo]));
+      seleccionar(nuevo);
+    } catch (e) {
+      // deja el texto tal cual para que el usuario reintente
+    } finally {
+      setCreando(false);
+    }
+  };
+
+  return (
+    <div style={{ position: "relative" }}>
+      <input
+        style={inputStyle}
+        placeholder={cargando ? "Cargando proveedores..." : "Buscar o escribir proveedor..."}
+        value={busqueda}
+        onChange={e => { setBusqueda(e.target.value); setShowDropdown(true); onChange({ id: "", nombre: e.target.value }); }}
+        onFocus={() => setShowDropdown(true)}
+        onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
+        autoComplete="off"
+      />
+      {showDropdown && (
+        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "var(--color-background-primary)", border: "1px solid var(--color-border-secondary)", borderRadius: 8, zIndex: 200, maxHeight: 200, overflowY: "auto", boxShadow: "0 8px 24px rgba(0,0,0,0.3)" }}>
+          {filtrados.length === 0 && !busqueda.trim() && !cargando && (
+            <div style={{ padding: "10px 14px", fontSize: 12, color: "var(--color-text-secondary)" }}>Aún no tienes proveedores registrados — escribe uno para crearlo</div>
+          )}
+          {filtrados.map(p => (
+            <button key={p.id} onMouseDown={() => seleccionar(p)}
+              style={{ width: "100%", padding: "8px 14px", background: "none", border: "none", cursor: "pointer", textAlign: "left", fontSize: 13, borderBottom: "1px solid var(--color-border-tertiary)" }}>
+              {p.nombre}
+            </button>
+          ))}
+          {busqueda.trim() && !hayCoincidenciaExacta && (
+            <button onMouseDown={crearNuevo} disabled={creando}
+              style={{ width: "100%", padding: "8px 14px", background: "rgba(29,78,216,0.08)", border: "none", cursor: creando ? "default" : "pointer", textAlign: "left", fontSize: 13, color: "#1D4ED8", fontWeight: 600 }}>
+              {creando ? "Creando..." : `+ Crear proveedor "${busqueda.trim()}"`}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Modal Nueva Compra ───────────────────────────────────────────────────────
 function ModalCompra({ onClose, onSaved }) {
-  const [form, setForm] = useState({ proveedor: "", fecha_recepcion: hoyISO(), num_factura: "", notas: "" });
+  const [form, setForm] = useState({ proveedor_id: "", proveedor_nombre: "", fecha_recepcion: hoyISO(), num_factura: "", notas: "" });
   const [items, setItems] = useState([{ producto_id: "", nombre_producto: "", busqueda: "", cantidad: "", costo_unitario: "", showDropdown: false }]);
   const [conIva, setConIva] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -257,7 +336,11 @@ function ModalCompra({ onClose, onSaved }) {
     setLoading(true); setError("");
     try {
       await api.crearCompra({
-        ...form,
+        proveedor_id: form.proveedor_id || undefined,
+        proveedor_nuevo: (!form.proveedor_id && form.proveedor_nombre?.trim()) ? form.proveedor_nombre.trim() : undefined,
+        fecha_recepcion: form.fecha_recepcion,
+        num_factura: form.num_factura,
+        notas: form.notas,
         aplicar_iva: conIva,
         items: validItems.map(i => ({ producto_id: i.producto_id, cantidad: parseFloat(i.cantidad), costo_unitario: parseFloat(i.costo_unitario) }))
       });
@@ -274,7 +357,14 @@ function ModalCompra({ onClose, onSaved }) {
         </div>
         {error && <div style={{ background: "#FEE2E2", color: "#B91C1C", borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 12 }}>{error}</div>}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
-          <div><label style={labelStyle}>Proveedor</label><input style={inputStyle} placeholder="Nombre del proveedor" value={form.proveedor} onChange={e => setForm(p => ({ ...p, proveedor: e.target.value }))} /></div>
+          <div>
+            <label style={labelStyle}>Proveedor</label>
+            <SelectorProveedor
+              proveedorId={form.proveedor_id}
+              proveedorNombre={form.proveedor_nombre}
+              onChange={({ id, nombre }) => setForm(p => ({ ...p, proveedor_id: id, proveedor_nombre: nombre }))}
+            />
+          </div>
           <div><label style={labelStyle}>Fecha de recepción *</label><input type="date" style={inputStyle} value={form.fecha_recepcion} onChange={e => setForm(p => ({ ...p, fecha_recepcion: e.target.value }))} /></div>
           <div><label style={labelStyle}>No. factura</label><input style={inputStyle} placeholder="FAC-0001" value={form.num_factura} onChange={e => setForm(p => ({ ...p, num_factura: e.target.value }))} /></div>
           <div><label style={labelStyle}>Notas</label><input style={inputStyle} placeholder="Observaciones..." value={form.notas} onChange={e => setForm(p => ({ ...p, notas: e.target.value }))} /></div>

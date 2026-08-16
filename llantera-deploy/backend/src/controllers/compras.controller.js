@@ -7,8 +7,16 @@
  * Columnas en compras con restricción (subtotal/iva/total):
  *   Se hace UPDATE opcional post-INSERT con try/catch — si son GENERATED se ignora.
  *
- * Columnas escribibles confirmadas en compras:
- *   proveedor_nombre, fecha_recepcion, num_factura, notas, estado, folio, negocio_id, usuario_id
+ * Columnas escribibles confirmadas en compras (verificado contra schema.sql real,
+ * 14 ago 2026 — la tabla NUNCA tuvo proveedor_nombre, siempre fue proveedor_id
+ * con FK a la tabla `proveedores`):
+ *   proveedor_id, fecha_recepcion, num_factura, notas, estado, folio, negocio_id, usuario_id
+ *
+ * `proveedor_id` es opcional/desacoplado a propósito: si el frontend manda
+ * `proveedor_nuevo` (nombre en texto libre) en vez de un id existente, este
+ * controlador crea el proveedor en el catálogo dentro de la misma transacción.
+ * Así, si más adelante cambia la forma de capturar proveedor (ej. importación
+ * masiva, integración con otro sistema), solo se toca esta pieza.
  */
 import { query, getClient } from '../config/db.js';
 
@@ -26,14 +34,16 @@ export const listar = async (req, res) => {
     const { limit = 50, offset = 0 } = req.query;
     const { rows } = await query(
       `SELECT c.*,
+              pr.nombre as proveedor_nombre,
               u.nombre as usuario_nombre,
               COUNT(cd.id) as num_partidas,
               COALESCE(SUM(cd.subtotal), 0) as total_calculado
        FROM compras c
+       LEFT JOIN proveedores pr     ON c.proveedor_id = pr.id
        LEFT JOIN usuarios u         ON c.usuario_id = u.id
        LEFT JOIN compras_detalle cd ON cd.compra_id = c.id
        WHERE c.negocio_id = $1
-       GROUP BY c.id, u.nombre
+       GROUP BY c.id, pr.nombre, u.nombre
        ORDER BY c.fecha_recepcion DESC
        LIMIT $2 OFFSET $3`,
       [req.user.negocio_id, limit, offset]
@@ -48,7 +58,10 @@ export const listar = async (req, res) => {
 export const obtener = async (req, res) => {
   try {
     const { rows: [compra] } = await query(
-      `SELECT c.* FROM compras c WHERE c.id = $1 AND c.negocio_id = $2`,
+      `SELECT c.*, pr.nombre as proveedor_nombre
+       FROM compras c
+       LEFT JOIN proveedores pr ON c.proveedor_id = pr.id
+       WHERE c.id = $1 AND c.negocio_id = $2`,
       [req.params.id, req.user.negocio_id]
     );
     if (!compra) return res.status(404).json({ error: 'Compra no encontrada' });
@@ -72,9 +85,29 @@ export const crear = async (req, res) => {
   try {
     await client.query('BEGIN');
     const negocio_id = req.user.negocio_id;
-    const { proveedor, fecha_recepcion, num_factura, notas, items = [], aplicar_iva = false } = req.body;
+    const { proveedor_id, proveedor_nuevo, fecha_recepcion, num_factura, notas, items = [], aplicar_iva = false } = req.body;
 
     if (!items.length) throw new Error('La compra debe tener al menos un producto');
+
+    // Resolver proveedor: usa el id existente si lo mandan, o crea uno nuevo
+    // en el catálogo si mandan solo el nombre (fallback si el frontend no
+    // pudo resolverlo antes de enviar, ej. llamada directa a la API).
+    let proveedorIdFinal = proveedor_id || null;
+    if (!proveedorIdFinal && proveedor_nuevo?.trim()) {
+      const { rows: [existente] } = await client.query(
+        `SELECT id FROM proveedores WHERE negocio_id = $1 AND LOWER(nombre) = LOWER($2) AND activo = true`,
+        [negocio_id, proveedor_nuevo.trim()]
+      );
+      if (existente) {
+        proveedorIdFinal = existente.id;
+      } else {
+        const { rows: [nuevoProv] } = await client.query(
+          `INSERT INTO proveedores (negocio_id, nombre) VALUES ($1, $2) RETURNING id`,
+          [negocio_id, proveedor_nuevo.trim()]
+        );
+        proveedorIdFinal = nuevoProv.id;
+      }
+    }
 
     let subtotal = 0;
     const detalles = [];
@@ -99,20 +132,16 @@ export const crear = async (req, res) => {
     const total = subtotal + iva;
     const folio = await generarFolio(client, negocio_id);
 
-    const notasFinales = notas
-      ? (proveedor ? `Proveedor: ${proveedor} | ${notas}` : notas)
-      : (proveedor || null);
-
     // INSERT cabecera — solo columnas escribibles confirmadas (sin subtotal/iva/total)
     const { rows: [compra] } = await client.query(
       `INSERT INTO compras
-         (negocio_id, folio, proveedor_nombre, fecha_recepcion, num_factura, notas, usuario_id, estado)
+         (negocio_id, folio, proveedor_id, fecha_recepcion, num_factura, notas, usuario_id, estado)
        VALUES ($1, $2, $3, $4, $5, $6, $7, 'recibida')
        RETURNING *`,
-      [negocio_id, folio, proveedor || null,
+      [negocio_id, folio, proveedorIdFinal,
        fecha_recepcion || new Date(),
        num_factura     || null,
-       notasFinales,
+       notas           || null,
        req.user.id]
     );
 

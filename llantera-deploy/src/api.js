@@ -61,6 +61,12 @@ export const api = {
   crearCompra: (data) =>
     fetch(`${BASE}/compras`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle),
 
+  // Proveedores
+  proveedores: () =>
+    fetch(`${BASE}/proveedores`, { headers: headers() }).then(handle),
+  crearProveedor: (data) =>
+    fetch(`${BASE}/proveedores`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle),
+
   // Gastos
   gastos: (params = '') =>
     fetch(`${BASE}/gastos?${params}`, { headers: headers() }).then(handle),

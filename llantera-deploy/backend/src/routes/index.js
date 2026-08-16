@@ -19,6 +19,7 @@ import * as movimientos from '../controllers/movimientos.controller.js';
 import * as cortes      from '../controllers/cortes.controller.js';
 import * as catalogos   from '../controllers/catalogos.controller.js';
 import * as credito     from '../controllers/credito.controller.js';
+import * as proveedores from '../controllers/proveedores.controller.js';
 
 const r = Router();
 
@@ -53,6 +54,12 @@ r.delete('/productos/fotos/:fotoId',      authenticate, productos.eliminarFoto);
 r.get ('/compras',                        authenticate, compras.listar);
 r.get ('/compras/:id',                    authenticate, compras.obtener);
 r.post('/compras',                        authenticate, compras.crear);
+
+// ── Proveedores (catálogo, usado por el selector en Compras) ──────────────────
+r.get   ('/proveedores',                  authenticate, proveedores.listar);
+r.post  ('/proveedores',                  authenticate, proveedores.crear);
+r.put   ('/proveedores/:id',              authenticate, proveedores.actualizar);
+r.delete('/proveedores/:id',              authenticate, proveedores.eliminar);
 
 // ── Gastos ────────────────────────────────────────────────────────────────────
 r.get ('/gastos',                         authenticate, gastos.listar);
