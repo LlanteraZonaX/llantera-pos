@@ -269,7 +269,7 @@ function SelectorProveedor({ proveedorId, proveedorNombre, onChange }) {
           )}
           {filtrados.map(p => (
             <button key={p.id} onMouseDown={() => seleccionar(p)}
-              style={{ width: "100%", padding: "8px 14px", background: "none", border: "none", cursor: "pointer", textAlign: "left", fontSize: 13, borderBottom: "1px solid var(--color-border-tertiary)" }}>
+              style={{ width: "100%", padding: "8px 14px", background: "none", border: "none", cursor: "pointer", textAlign: "left", fontSize: 13, color: "#fff", fontWeight: 500, borderBottom: "1px solid var(--color-border-tertiary)" }}>
               {p.nombre}
             </button>
           ))}
@@ -2247,6 +2247,114 @@ function ModalCliente({ onClose, onSaved }) {
   );
 }
 
+// ─── Gestión de Proveedores (catálogo, con editar y eliminar) ────────────────
+function Proveedores() {
+  const [proveedores, setProveedores] = useState([]);
+  const [buscar, setBuscar] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState(null); // null | "nuevo" | objeto proveedor (edición)
+
+  const cargar = useCallback(() => {
+    setLoading(true);
+    api.proveedores()
+      .then(r => setProveedores(r.data || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  const eliminar = async (prov) => {
+    if (!window.confirm(`¿Eliminar al proveedor "${prov.nombre}"?\n\nLas compras ya registradas con este proveedor conservan su historial, solo deja de aparecer en el selector de nuevas compras.`)) return;
+    try {
+      await api.eliminarProveedor(prov.id);
+      cargar();
+    } catch (e) {
+      alert(e.message || "Error al eliminar el proveedor");
+    }
+  };
+
+  const filtrados = buscar.trim()
+    ? proveedores.filter(p =>
+        p.nombre?.toLowerCase().includes(buscar.trim().toLowerCase()) ||
+        p.telefono?.includes(buscar.trim()) ||
+        p.rfc?.toLowerCase().includes(buscar.trim().toLowerCase()))
+    : proveedores;
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+        <input style={{ ...inputStyle, flex: 1 }} placeholder="Buscar por nombre, teléfono o RFC..." value={buscar} onChange={e => setBuscar(e.target.value)} />
+        <button onClick={() => setModal("nuevo")} style={{ padding: "8px 18px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600, whiteSpace: "nowrap" }}>+ Nuevo proveedor</button>
+      </div>
+      {loading ? <div style={{ textAlign: "center", padding: 40, color: "var(--color-text-secondary)" }}>Cargando...</div> :
+        filtrados.length === 0
+          ? <div style={{ textAlign: "center", padding: 60, color: "var(--color-text-secondary)" }}>{buscar.trim() ? "Sin resultados para esa búsqueda." : "No hay proveedores registrados aún."}</div>
+          : filtrados.map(p => (
+            <div key={p.id} style={{ background: "var(--color-background-secondary)", borderRadius: 10, padding: "12px 16px", border: "1px solid var(--color-border-tertiary)", marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{p.nombre}</div>
+                <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
+                  {[p.contacto, p.telefono, p.rfc].filter(Boolean).join(" · ") || "Sin datos de contacto"}
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                <button onClick={() => setModal(p)} style={{ padding: "6px 12px", background: "none", border: "1px solid var(--color-border-secondary)", borderRadius: 6, cursor: "pointer", fontSize: 12, color: "#fff" }}>Editar</button>
+                <button onClick={() => eliminar(p)} style={{ padding: "6px 12px", background: "#FEE2E2", border: "none", borderRadius: 6, cursor: "pointer", fontSize: 12, color: "#B91C1C", fontWeight: 600 }}>Eliminar</button>
+              </div>
+            </div>
+          ))
+      }
+      {modal && <ModalProveedor proveedor={modal === "nuevo" ? null : modal} onClose={() => setModal(null)} onSaved={() => { setModal(null); cargar(); }} />}
+    </div>
+  );
+}
+
+function ModalProveedor({ proveedor, onClose, onSaved }) {
+  const esEdicion = !!proveedor;
+  const [form, setForm] = useState({
+    nombre: proveedor?.nombre || "",
+    contacto: proveedor?.contacto || "",
+    telefono: proveedor?.telefono || "",
+    email: proveedor?.email || "",
+    rfc: proveedor?.rfc || "",
+    direccion: proveedor?.direccion || "",
+  });
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError(""); setLoading(true);
+    try {
+      if (esEdicion) await api.actualizarProveedor(proveedor.id, form);
+      else await api.crearProveedor(form);
+      onSaved();
+    } catch (err) { setError(err.message || "Error al guardar el proveedor"); } finally { setLoading(false); }
+  };
+
+  return (
+    <div style={overlayStyle}>
+      <form onSubmit={submit} style={{ ...modalBase, maxWidth: 400 }}>
+        <h2 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 600 }}>🚚 {esEdicion ? "Editar proveedor" : "Nuevo proveedor"}</h2>
+        {error && <div style={{ background: "#FEE2E2", color: "#B91C1C", borderRadius: 8, padding: "8px 12px", fontSize: 12, marginBottom: 12 }}>{error}</div>}
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <input style={inputStyle} placeholder="Nombre del proveedor *" required value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} />
+          <input style={inputStyle} placeholder="Persona de contacto (opcional)" value={form.contacto} onChange={e => setForm({ ...form, contacto: e.target.value })} />
+          <input style={inputStyle} placeholder="Teléfono (opcional)" value={form.telefono} onChange={e => setForm({ ...form, telefono: e.target.value })} />
+          <input style={inputStyle} type="email" placeholder="Email (opcional)" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+          <input style={inputStyle} placeholder="RFC (opcional)" value={form.rfc} onChange={e => setForm({ ...form, rfc: e.target.value })} />
+          <input style={inputStyle} placeholder="Dirección (opcional)" value={form.direccion} onChange={e => setForm({ ...form, direccion: e.target.value })} />
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
+          <button type="button" onClick={onClose} style={{ flex: 1, padding: "9px", border: "1px solid var(--color-border-secondary)", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13, color: "#fff" }}>Cancelar</button>
+          <button type="submit" disabled={loading} style={{ flex: 1, padding: "9px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>{loading ? "Guardando..." : esEdicion ? "Guardar cambios" : "Crear proveedor"}</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 // ─── Gestión de Usuarios (solo admin) ─────────────────────────────────────────
 // ─── Módulo Reportes ──────────────────────────────────────────────────────────
 // IMPORTANTE: usamos fecha LOCAL (no toISOString, que es UTC) porque México
@@ -3883,6 +3991,7 @@ const NAV = [
       { id: "lotes_devolucion", icon: "↩️", label: "Devolución" },
   ]},
   { id: "compras",            icon: "🚚", label: "Compras",            permiso: "compras" },
+  { id: "proveedores",        icon: "🏭", label: "Proveedores",        permiso: "compras" },
   { id: "gastos",             icon: "💸", label: "Gastos",             permiso: "gastos" },
   { id: "clientes",           icon: "👥", label: "Clientes",           permiso: "clientes" },
 
@@ -4169,6 +4278,7 @@ function AppPrivada() {
         {seccionActiva === "lotes_recepcion"  && <RecepcionLotes />}
         {seccionActiva === "lotes_devolucion" && <DevolucionLotes />}
         {seccionActiva === "compras"     && <Compras onNuevaCompra={() => setModal("compra")} />}
+        {seccionActiva === "proveedores" && <Proveedores />}
         {seccionActiva === "gastos"      && <Gastos onNuevoGasto={() => setModal("gasto")} />}
         {seccionActiva === "clientes"    && <Clientes />}
         {seccionActiva === "reportes"    && <Reportes />}

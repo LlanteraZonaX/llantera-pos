@@ -66,6 +66,10 @@ export const api = {
     fetch(`${BASE}/proveedores`, { headers: headers() }).then(handle),
   crearProveedor: (data) =>
     fetch(`${BASE}/proveedores`, { method: 'POST', headers: headers(), body: JSON.stringify(data) }).then(handle),
+  actualizarProveedor: (id, data) =>
+    fetch(`${BASE}/proveedores/${id}`, { method: 'PUT', headers: headers(), body: JSON.stringify(data) }).then(handle),
+  eliminarProveedor: (id) =>
+    fetch(`${BASE}/proveedores/${id}`, { method: 'DELETE', headers: headers() }).then(handle),
 
   // Gastos
   gastos: (params = '') =>
