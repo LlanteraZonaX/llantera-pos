@@ -133,6 +133,15 @@ export const api = {
     fetch(`${BASE}/negocio`, { headers: headers() }).then(handle),
   actualizarNegocio: (data) =>
     fetch(`${BASE}/negocio`, { method: 'PUT', headers: headers(), body: JSON.stringify(data) }).then(handle),
+  subirLogoNegocio: (archivo) => {
+    const form = new FormData();
+    form.append('foto', archivo);
+    return fetch(`${BASE}/negocio/logo`, {
+      method: 'POST',
+      headers: getToken() ? { Authorization: `Bearer ${getToken()}` } : {},
+      body: form,
+    }).then(handle);
+  },
 
   // Lotes
   lotes: (params = '') =>

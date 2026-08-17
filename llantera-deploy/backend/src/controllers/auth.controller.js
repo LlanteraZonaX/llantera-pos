@@ -26,7 +26,8 @@ export const login = async (req, res) => {
 
     const { rows } = await query(
       `SELECT u.id, u.nombre, u.email, u.password_hash, u.activo, u.negocio_id,
-              r.nombre as rol, r.permisos, n.nombre as negocio_nombre, n.slug as negocio_slug
+              r.nombre as rol, r.permisos, n.nombre as negocio_nombre, n.slug as negocio_slug,
+              n.logo_url as negocio_logo_url
        FROM usuarios u
        JOIN roles r ON u.rol_id = r.id
        JOIN negocios n ON u.negocio_id = n.id
@@ -73,7 +74,7 @@ export const login = async (req, res) => {
         email: user.email,
         rol: user.rol,
         permisos: user.permisos,
-        negocio: { id: user.negocio_id, nombre: user.negocio_nombre, slug: user.negocio_slug },
+        negocio: { id: user.negocio_id, nombre: user.negocio_nombre, slug: user.negocio_slug, logo_url: user.negocio_logo_url },
       },
     });
   } catch (err) {

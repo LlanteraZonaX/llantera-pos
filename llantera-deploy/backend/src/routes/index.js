@@ -113,6 +113,12 @@ r.post('/admin/restaurar',  authenticate, authorize('admin'), respaldo.restaurar
 // ── Negocio ───────────────────────────────────────────────────────────────────
 r.get ('/negocio',                        authenticate, negocio.obtener);
 r.put ('/negocio',                        authenticate, authorize('admin'), negocio.actualizar);
+r.post('/negocio/logo',                   authenticate, authorize('admin'), (req, res, next) => {
+  uploadFoto(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message || 'Error al procesar el archivo' });
+    next();
+  });
+}, negocio.subirLogo);
 
 // ── Lotes de llantas ──────────────────────────────────────────────────────────
 r.get ('/lotes',                          authenticate, lotes.listar);

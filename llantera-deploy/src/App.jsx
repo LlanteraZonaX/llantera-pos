@@ -2761,14 +2761,41 @@ function Configuracion() {
   const [datos, setDatos] = useState(null);
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
+  const [subiendoLogo, setSubiendoLogo] = useState(false);
   const [mensaje, setMensaje] = useState("");
   const [error, setError] = useState("");
+  const inputLogoRef = useRef(null);
 
   useEffect(() => {
     api.negocio().then(setDatos).catch(() => setError("No se pudieron cargar los datos del negocio")).finally(() => setLoading(false));
   }, []);
 
   const cambiar = (campo, valor) => setDatos(prev => ({ ...prev, [campo]: valor }));
+
+  const subirLogo = async (e) => {
+    const archivo = e.target.files?.[0];
+    e.target.value = ""; // permite volver a elegir el mismo archivo si reintenta
+    if (!archivo) return;
+    if (archivo.size > 5 * 1024 * 1024) { setError("La imagen no puede pesar más de 5MB"); return; }
+
+    setSubiendoLogo(true); setMensaje(""); setError("");
+    try {
+      const actualizado = await api.subirLogoNegocio(archivo);
+      setDatos(actualizado);
+      // El nombre/logo del sidebar se lee de localStorage (se guarda ahí desde el
+      // login), así que lo actualizamos aquí también para que se refleje sin
+      // tener que cerrar sesión — y recargamos para que el sidebar lo tome.
+      try {
+        const cache = JSON.parse(localStorage.getItem("llantera_user"));
+        if (cache?.negocio) {
+          cache.negocio.logo_url = actualizado.logo_url;
+          localStorage.setItem("llantera_user", JSON.stringify(cache));
+        }
+      } catch {}
+      setMensaje("Logo actualizado. Recargando...");
+      setTimeout(() => window.location.reload(), 900);
+    } catch (e) { setError(e.message || "Error al subir el logo"); setSubiendoLogo(false); }
+  };
 
   const guardar = async () => {
     setGuardando(true); setMensaje(""); setError("");
@@ -2788,7 +2815,7 @@ function Configuracion() {
   return (
     <div style={{ maxWidth: 480 }}>
       <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 0, marginBottom: 20 }}>
-        Estos datos aparecen en las cotizaciones que comparten con tus clientes por WhatsApp.
+        Estos datos aparecen en las cotizaciones que comparten con tus clientes por WhatsApp, y el logo también se usa en el menú lateral.
       </p>
 
       <div style={{ background: "var(--color-background-secondary)", borderRadius: 14, border: "1px solid var(--color-border-tertiary)", padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
@@ -2796,12 +2823,22 @@ function Configuracion() {
         {mensaje && <div style={{ background: "#D1FAE5", color: "#065F46", borderRadius: 8, padding: "8px 12px", fontSize: 12 }}>{mensaje}</div>}
 
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          {datos.logo_url
-            ? <img src={datos.logo_url} alt="Logo" style={{ width: 56, height: 56, borderRadius: 10, objectFit: "cover", border: "1px solid var(--color-border-tertiary)" }} />
-            : <div style={{ width: 56, height: 56, borderRadius: 10, background: "var(--color-background-tertiary)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, flexShrink: 0 }}>🛞</div>}
+          <div style={{ width: 64, height: 64, borderRadius: 10, background: "var(--color-background-tertiary)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden", border: "1px solid var(--color-border-tertiary)", position: "relative" }}>
+            {datos.logo_url
+              ? <img src={datos.logo_url} alt="Logo" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+              : <span style={{ fontSize: 26 }}>🛞</span>}
+            {subiendoLogo && (
+              <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#fff" }}>...</div>
+            )}
+          </div>
           <div style={{ flex: 1 }}>
-            <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 4 }}>Logo del negocio (URL de imagen)</label>
-            <input style={inputStyle} placeholder="https://..." value={datos.logo_url || ""} onChange={e => cambiar("logo_url", e.target.value)} />
+            <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 6 }}>Logo del negocio</label>
+            <input ref={inputLogoRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={subirLogo} style={{ display: "none" }} />
+            <button type="button" onClick={() => inputLogoRef.current?.click()} disabled={subiendoLogo}
+              style={{ padding: "7px 14px", background: "none", border: "1px solid var(--color-border-secondary)", borderRadius: 8, cursor: subiendoLogo ? "default" : "pointer", fontSize: 12, color: "#fff", fontWeight: 600 }}>
+              {subiendoLogo ? "Subiendo..." : datos.logo_url ? "Cambiar imagen" : "Subir imagen"}
+            </button>
+            <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginTop: 5 }}>JPG, PNG, WEBP o GIF · máx. 5MB · se ajusta automáticamente al tamaño ideal</div>
           </div>
         </div>
 
@@ -4176,9 +4213,17 @@ function AppPrivada() {
           transform: menuAbierto ? "translateX(0)" : "translateX(-100%)",
         } : {}),
       }}>
-        <div style={{ padding: (sidebar || isMobile) ? "20px 16px 12px" : "20px 8px 12px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 22, flexShrink: 0 }}>🚗</span>
-          {(sidebar || isMobile) && <span style={{ color: "#fff", fontWeight: 700, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden" }}>{user.negocio?.nombre || "Llantera POS"}</span>}
+        <div style={{ padding: (sidebar || isMobile) ? "16px 16px 14px" : "16px 8px 14px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 8, background: user.negocio?.logo_url ? "#fff" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }}>
+            {user.negocio?.logo_url
+              ? <img src={user.negocio.logo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+              : <span style={{ fontSize: 22 }}>🚗</span>}
+          </div>
+          {(sidebar || isMobile) && (
+            <span title={user.negocio?.nombre || "Llantera POS"} style={{ color: "#fff", fontWeight: 700, fontSize: 13, lineHeight: 1.2, whiteSpace: "normal", wordBreak: "break-word", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", flex: 1, minWidth: 0 }}>
+              {user.negocio?.nombre || "Llantera POS"}
+            </span>
+          )}
           {isMobile
             ? <button onClick={() => setMenuAbierto(false)} style={{ marginLeft: "auto", background: "none", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: 18, padding: 2 }}>✕</button>
             : <button onClick={() => setSidebar(!sidebar)} style={{ marginLeft: "auto", background: "none", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: 16, padding: 2 }}>{sidebar ? "◂" : "▸"}</button>}
