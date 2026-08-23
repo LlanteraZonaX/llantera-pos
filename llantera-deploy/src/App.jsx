@@ -3105,8 +3105,7 @@ function Ventas() {
   const [carrito, setCarrito] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [clienteId, setClienteId] = useState("");
-  const [metodoPago, setMetodoPago] = useState("efectivo");
-  const [montoPagado, setMontoPagado] = useState("");
+  const [pagos, setPagos] = useState([{ metodo_pago: "efectivo", monto: "" }]);
   const [descuento, setDescuento] = useState(0);
   const [notas, setNotas] = useState("");
   const [fechaVenta, setFechaVenta] = useState(""); // vacío = usar la fecha/hora actual
@@ -3164,10 +3163,32 @@ function Ventas() {
   const iva = cobrarIva ? base * 0.16 : 0;
   const total = base + iva;
 
+  // ── Pago dividido en más de un método (efectivo + tarjeta + transferencia) ──
+  const dividido = pagos.length > 1;
+  const agregarLineaPago = () => {
+    const metodosUsados = pagos.map(p => p.metodo_pago);
+    const siguiente = ["tarjeta", "transferencia", "efectivo"].find(m => !metodosUsados.includes(m)) || "tarjeta";
+    const yaAsignado = pagos.reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
+    const restante = Math.max(0, total - yaAsignado);
+    setPagos(prev => [...prev, { metodo_pago: siguiente, monto: restante > 0 ? restante.toFixed(2) : "" }]);
+  };
+  const quitarLineaPago = (idx) => setPagos(prev => prev.length > 1 ? prev.filter((_, i) => i !== idx) : prev);
+  const cambiarLineaPago = (idx, campo, valor) => setPagos(prev => prev.map((p, i) => i === idx ? { ...p, [campo]: valor } : p));
+
+  const asignado = pagos.reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
+  const excedePagoDividido = dividido && asignado > total + 0.009;
+
   const cobrar = async () => {
     if (!carrito.length) return setError("Agrega al menos un producto a la venta");
+    if (excedePagoDividido) return setError("La suma de los métodos de pago no puede ser mayor al total");
     setProcesando(true); setError("");
     try {
+      const pagosParaEnviar = dividido
+        ? pagos.map(p => ({ metodo_pago: p.metodo_pago, monto: parseFloat(p.monto) || 0 })).filter(p => p.monto > 0)
+        : [{ metodo_pago: pagos[0].metodo_pago, monto: pagos[0].monto ? parseFloat(pagos[0].monto) : total }];
+
+      if (!pagosParaEnviar.length) return setError("Indica al menos un monto de pago");
+
       const data = await api.crearVenta({
         cliente_id: clienteId || null,
         // Se envía el precio unitario efectivo (monto a cobrar / cantidad) para
@@ -3177,8 +3198,7 @@ function Ventas() {
           cantidad: i.cantidad,
           precio_unitario: i.cantidad > 0 ? (parseFloat(i.montoCobrado) || 0) / i.cantidad : 0,
         })),
-        metodo_pago: metodoPago,
-        monto_pagado: montoPagado ? parseFloat(montoPagado) : total,
+        pagos: pagosParaEnviar,
         descuento_global: parseFloat(descuento) || 0,
         aplicar_iva: cobrarIva,
         notas: notas || null,
@@ -3189,7 +3209,7 @@ function Ventas() {
   };
 
   const nuevaVenta = () => {
-    setCarrito([]); setClienteId(""); setMontoPagado(""); setDescuento(0); setNotas(""); setFechaVenta(""); setCobrarIva(false); setVentaLista(null); setOpcionesAvanzadas(false);
+    setCarrito([]); setClienteId(""); setPagos([{ metodo_pago: "efectivo", monto: "" }]); setDescuento(0); setNotas(""); setFechaVenta(""); setCobrarIva(false); setVentaLista(null); setOpcionesAvanzadas(false);
   };
 
   if (ventaLista) {
@@ -3271,14 +3291,6 @@ function Ventas() {
 
         <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
           <div style={{ flex: 1 }}>
-            <label style={labelStyle}>Método de pago</label>
-            <select style={inputStyle} value={metodoPago} onChange={e => setMetodoPago(e.target.value)}>
-              <option value="efectivo">💵 Efectivo</option>
-              <option value="tarjeta">💳 Tarjeta</option>
-              <option value="transferencia">🏦 Transferencia</option>
-            </select>
-          </div>
-          <div style={{ flex: 1 }}>
             <label style={labelStyle}>Descuento en pesos ($)</label>
             <input style={inputStyle} type="number" min={0} placeholder="0" value={descuento} onChange={e => setDescuento(e.target.value)} />
           </div>
@@ -3308,19 +3320,67 @@ function Ventas() {
           </div>
         </div>
 
-        {/* ── Monto recibido + cambio ───────────────────────────────────────── */}
+        {/* ── Pago (uno o varios métodos) ───────────────────────────────────── */}
         <div style={{ marginBottom: 10 }}>
-          <label style={labelStyle}>Monto recibido del cliente</label>
-          <input style={inputStyle} type="number" min={0} placeholder={`${fmt(total)}`} value={montoPagado} onChange={e => setMontoPagado(e.target.value)} />
-          {montoPagado && parseFloat(montoPagado) > total && (
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, padding: "6px 10px", background: "rgba(5,150,105,0.12)", borderRadius: 6, fontSize: 13, fontWeight: 700, color: "#10B981" }}>
-              <span>Cambio</span><span>{fmt(parseFloat(montoPagado) - total)}</span>
+          <label style={labelStyle}>{dividido ? "Pago dividido por método" : "Método de pago"}</label>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {pagos.map((p, idx) => (
+              <div key={idx} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <select style={{ ...inputStyle, flex: dividido ? "0 0 42%" : 1 }} value={p.metodo_pago} onChange={e => cambiarLineaPago(idx, "metodo_pago", e.target.value)}>
+                  <option value="efectivo">💵 Efectivo</option>
+                  <option value="tarjeta">💳 Tarjeta</option>
+                  <option value="transferencia">🏦 Transferencia</option>
+                </select>
+                {dividido && (
+                  <input
+                    style={{ ...inputStyle, flex: 1 }} type="number" min={0} step="0.01"
+                    placeholder="Monto"
+                    value={p.monto}
+                    onChange={e => cambiarLineaPago(idx, "monto", e.target.value)}
+                  />
+                )}
+                {dividido && (
+                  <button onClick={() => quitarLineaPago(idx)} style={{ background: "none", border: "none", color: "#B91C1C", cursor: "pointer", fontSize: 14, padding: "0 4px", flexShrink: 0 }}>✕</button>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <button onClick={agregarLineaPago} style={{ marginTop: 6, background: "none", border: "1px dashed var(--color-border-tertiary)", borderRadius: 6, padding: "6px 10px", cursor: "pointer", fontSize: 11, color: "var(--color-text-secondary)", width: "100%", textAlign: "left" }}>
+            + Dividir el pago en más de un método
+          </button>
+
+          {dividido && (
+            <div style={{
+              marginTop: 8, padding: "6px 10px", borderRadius: 6, fontSize: 12, fontWeight: 600,
+              background: excedePagoDividido ? "rgba(185,28,28,0.12)" : Math.abs(asignado - total) < 0.01 ? "rgba(5,150,105,0.12)" : "rgba(245,158,11,0.1)",
+              color: excedePagoDividido ? "#EF4444" : Math.abs(asignado - total) < 0.01 ? "#10B981" : "#F59E0B",
+            }}>
+              {excedePagoDividido
+                ? `⚠ Asignaste ${fmt(asignado)}, no puede ser mayor al total (${fmt(total)})`
+                : Math.abs(asignado - total) < 0.01
+                  ? `✓ Asignado completo: ${fmt(asignado)}`
+                  : `Asignado ${fmt(asignado)} de ${fmt(total)} — quedará ${fmt(total - asignado)} pendiente como crédito`}
             </div>
           )}
-          {montoPagado && parseFloat(montoPagado) < total && (
+
+          {!dividido && parseFloat(pagos[0].monto) > total && (
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, padding: "6px 10px", background: "rgba(5,150,105,0.12)", borderRadius: 6, fontSize: 13, fontWeight: 700, color: "#10B981" }}>
+              <span>Cambio</span><span>{fmt(parseFloat(pagos[0].monto) - total)}</span>
+            </div>
+          )}
+          {!dividido && pagos[0].monto && parseFloat(pagos[0].monto) < total && (
             <div style={{ marginTop: 6, padding: "4px 10px", background: "rgba(245,158,11,0.1)", borderRadius: 6, fontSize: 11, color: "#F59E0B" }}>
               ⚠ Monto incompleto — quedará como crédito pendiente
             </div>
+          )}
+          {!dividido && (
+            <input
+              style={{ ...inputStyle, marginTop: 6 }} type="number" min={0}
+              placeholder={`Monto recibido — ${fmt(total)}`}
+              value={pagos[0].monto}
+              onChange={e => cambiarLineaPago(0, "monto", e.target.value)}
+            />
           )}
         </div>
 
@@ -3347,8 +3407,8 @@ function Ventas() {
           </div>
         )}
 
-        <button onClick={cobrar} disabled={procesando || !carrito.length} style={{ width: "100%", padding: "13px", background: carrito.length ? "linear-gradient(135deg, #059669 0%, #047857 100%)" : "var(--color-background-tertiary)", color: carrito.length ? "#fff" : "var(--color-text-secondary)", border: "none", borderRadius: 10, cursor: carrito.length ? "pointer" : "not-allowed", fontSize: 15, fontWeight: 700, letterSpacing: "0.02em", boxShadow: carrito.length ? "0 4px 14px rgba(5,150,105,0.3)" : "none", transition: "all 0.15s" }}>
-          {procesando ? "Procesando..." : carrito.length ? `💰 Cobrar ${fmt(total)}` : "Agrega productos"}
+        <button onClick={cobrar} disabled={procesando || !carrito.length || excedePagoDividido} style={{ width: "100%", padding: "13px", background: (carrito.length && !excedePagoDividido) ? "linear-gradient(135deg, #059669 0%, #047857 100%)" : "var(--color-background-tertiary)", color: (carrito.length && !excedePagoDividido) ? "#fff" : "var(--color-text-secondary)", border: "none", borderRadius: 10, cursor: (carrito.length && !excedePagoDividido) ? "pointer" : "not-allowed", fontSize: 15, fontWeight: 700, letterSpacing: "0.02em", boxShadow: (carrito.length && !excedePagoDividido) ? "0 4px 14px rgba(5,150,105,0.3)" : "none", transition: "all 0.15s" }}>
+          {procesando ? "Procesando..." : !carrito.length ? "Agrega productos" : excedePagoDividido ? "Ajusta el pago dividido" : `💰 Cobrar ${fmt(total)}`}
         </button>
       </div>
     </div>
@@ -3414,7 +3474,11 @@ function ModalTicket({ ventaId, onClose }) {
   <div><b>Hora:</b> ${fmtH(venta.fecha_local || venta.fecha)}</div>
   <div><b>Cliente:</b> ${venta.cliente_nombre || "Cliente general"}</div>
   <div><b>Cajero:</b> ${venta.cajero_nombre || "—"}</div>
-  <div><b>Pago:</b> <span style="text-transform:capitalize">${venta.metodo_pago}</span></div>
+  <div><b>Pago:</b> <span style="text-transform:capitalize">${
+    venta.metodo_pago === 'mixto' && venta.pagos?.length
+      ? venta.pagos.map(p => `${p.metodo_pago}: $${parseFloat(p.monto).toFixed(2)}`).join(' + ')
+      : venta.metodo_pago
+  }</span></div>
 </div>
 <hr class="sep">
 <table>

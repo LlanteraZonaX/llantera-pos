@@ -44,12 +44,30 @@ export const crear = async (req, res) => {
     const negocio_id = req.user.negocio_id;
 
     const {
-      cliente_id, items, metodo_pago, monto_pagado,
+      cliente_id, items, metodo_pago, monto_pagado, pagos,
       descuento_global = 0, requiere_factura = false, notas,
       aplicar_iva = false, fecha
     } = req.body;
 
     if (!items?.length) throw new Error('La venta debe tener al menos un producto');
+
+    // Desglose de pago: el frontend puede mandar `pagos` = [{metodo_pago, monto}, ...]
+    // cuando el cajero divide el cobro en más de un método (ej. tarjeta + transferencia
+    // + efectivo). Si no manda `pagos` (llamadas viejas a la API, o un solo método),
+    // se arma un único renglón a partir de metodo_pago/monto_pagado, para no romper
+    // nada de lo que ya funcionaba.
+    const listaPagos = (Array.isArray(pagos) && pagos.length)
+      ? pagos.map(p => ({ metodo_pago: p.metodo_pago, monto: parseFloat(p.monto) || 0 })).filter(p => p.monto > 0)
+      : [{ metodo_pago: metodo_pago || 'efectivo', monto: parseFloat(monto_pagado) || 0 }];
+
+    const metodosValidos = ['efectivo', 'tarjeta', 'transferencia'];
+    for (const p of listaPagos) {
+      if (!metodosValidos.includes(p.metodo_pago))
+        throw new Error(`Método de pago no válido: ${p.metodo_pago}`);
+    }
+
+    const montoPagadoTotal = listaPagos.reduce((s, p) => s + p.monto, 0);
+    const metodoPagoVenta = listaPagos.length > 1 ? 'mixto' : listaPagos[0].metodo_pago;
 
     // Validar que la fecha no sea futura. $fecha es "YYYY-MM-DD" o null.
     // Comparamos solo el string de fecha para evitar ambigüedades de timezone.
@@ -82,8 +100,8 @@ export const crear = async (req, res) => {
     const base = subtotal - descuento;
     const iva = aplicar_iva ? base * 0.16 : 0;
     const total = base + iva;
-    const cambio = Math.max(0, (monto_pagado || 0) - total);
-    const estado = (monto_pagado || 0) >= total ? 'pagada' : 'pendiente';
+    const cambio = Math.max(0, montoPagadoTotal - total);
+    const estado = montoPagadoTotal >= total ? 'pagada' : 'pendiente';
     const folio = await generarFolio(client, negocio_id);
 
     const { rows: [venta] } = await client.query(
@@ -96,9 +114,20 @@ export const crear = async (req, res) => {
          ),
          $5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
       [folio, cliente_id, req.user.id, fecha || null, subtotal, descuento, iva, total,
-       metodo_pago || 'efectivo', monto_pagado || total, cambio,
+       metodoPagoVenta, montoPagadoTotal, cambio,
        requiere_factura, estado, notas, negocio_id]
     );
+
+    // Guarda el desglose real de cómo se pagó (una fila por método usado),
+    // incluso cuando fue un solo método — así todo reporte futuro (cortes de
+    // caja, análisis por método) puede depender siempre de esta tabla sin
+    // tener que distinguir casos.
+    for (const p of listaPagos) {
+      await client.query(
+        `INSERT INTO ventas_pagos (venta_id, metodo_pago, monto) VALUES ($1, $2, $3)`,
+        [venta.id, p.metodo_pago, p.monto]
+      );
+    }
 
     for (const item of detalle) {
       await client.query(
@@ -127,11 +156,11 @@ export const crear = async (req, res) => {
       await client.query(
         `INSERT INTO cuentas_cobrar (cliente_id, venta_id, monto_total, monto_pagado, fecha_vencimiento, negocio_id)
          VALUES ($1,$2,$3,$4, CURRENT_DATE + INTERVAL '30 days', $5)`,
-        [cliente_id, venta.id, total, monto_pagado || 0, negocio_id]
+        [cliente_id, venta.id, total, montoPagadoTotal, negocio_id]
       );
       await client.query(
         'UPDATE clientes SET saldo_pendiente = saldo_pendiente + $1 WHERE id = $2 AND negocio_id = $3',
-        [total - (monto_pagado || 0), cliente_id, negocio_id]
+        [total - montoPagadoTotal, cliente_id, negocio_id]
       );
     }
 
@@ -152,8 +181,14 @@ export const resumenDia = async (req, res) => {
       `SELECT
          COUNT(*) FILTER (WHERE estado = 'pagada') as ventas_pagadas,
          COALESCE(SUM(total) FILTER (WHERE estado = 'pagada'), 0) as ingresos,
-         COALESCE(SUM(total) FILTER (WHERE metodo_pago = 'efectivo' AND estado = 'pagada'), 0) as efectivo,
-         COALESCE(SUM(total) FILTER (WHERE metodo_pago = 'tarjeta' AND estado = 'pagada'), 0) as tarjeta,
+         COALESCE((SELECT SUM(vp.monto) FROM ventas_pagos vp JOIN ventas v2 ON v2.id = vp.venta_id
+                   WHERE v2.negocio_id = ventas.negocio_id AND v2.estado = 'pagada'
+                     AND (v2.fecha AT TIME ZONE 'America/Mexico_City')::date = (NOW() AT TIME ZONE 'America/Mexico_City')::date
+                     AND vp.metodo_pago = 'efectivo'), 0) as efectivo,
+         COALESCE((SELECT SUM(vp.monto) FROM ventas_pagos vp JOIN ventas v2 ON v2.id = vp.venta_id
+                   WHERE v2.negocio_id = ventas.negocio_id AND v2.estado = 'pagada'
+                     AND (v2.fecha AT TIME ZONE 'America/Mexico_City')::date = (NOW() AT TIME ZONE 'America/Mexico_City')::date
+                     AND vp.metodo_pago = 'tarjeta'), 0) as tarjeta,
          COALESCE(SUM(total) FILTER (WHERE estado = 'pendiente'), 0) as pendiente_cobro
        FROM ventas
        WHERE (fecha AT TIME ZONE 'America/Mexico_City')::date = (NOW() AT TIME ZONE 'America/Mexico_City')::date AND negocio_id = $1`,
@@ -167,23 +202,40 @@ export const resumenDia = async (req, res) => {
 
 // Actualizar método de pago de una venta existente
 export const actualizarMetodoPago = async (req, res) => {
+  const client = await getClient();
   try {
     const { metodo_pago } = req.body;
     const metodos = ['efectivo', 'tarjeta', 'transferencia'];
     if (!metodos.includes(metodo_pago))
       return res.status(400).json({ error: 'Método de pago no válido. Usa: efectivo, tarjeta o transferencia' });
 
-    const { rows: [venta] } = await query(
+    await client.query('BEGIN');
+    const { rows: [venta] } = await client.query(
       `UPDATE ventas SET metodo_pago = $1
        WHERE id = $2 AND negocio_id = $3 AND estado = 'pagada'
-       RETURNING id, folio, metodo_pago, total`,
+       RETURNING id, folio, metodo_pago, total, monto_pagado`,
       [metodo_pago, req.params.id, req.user.negocio_id]
     );
-    if (!venta) return res.status(404).json({ error: 'Venta no encontrada' });
+    if (!venta) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Venta no encontrada' }); }
+
+    // Esta corrección manual siempre deja la venta en UN solo método — si
+    // antes era un pago mixto (varias filas en ventas_pagos), se reemplazan
+    // por una sola fila con el monto total, para no dejar el desglose viejo
+    // desincronizado con lo que ahora dice la venta.
+    await client.query(`DELETE FROM ventas_pagos WHERE venta_id = $1`, [venta.id]);
+    await client.query(
+      `INSERT INTO ventas_pagos (venta_id, metodo_pago, monto) VALUES ($1, $2, $3)`,
+      [venta.id, metodo_pago, venta.monto_pagado]
+    );
+
+    await client.query('COMMIT');
     res.json({ ...venta, mensaje: `Método de pago actualizado a ${metodo_pago}` });
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error(err);
     res.status(500).json({ error: 'Error al actualizar método de pago' });
+  } finally {
+    client.release();
   }
 };
 
@@ -216,7 +268,13 @@ export const obtener = async (req, res) => {
        WHERE vd.venta_id = $1 ORDER BY p.nombre`,
       [venta.id]
     );
-    res.json({ ...venta, items });
+
+    const { rows: pagos } = await query(
+      `SELECT metodo_pago, monto FROM ventas_pagos WHERE venta_id = $1 ORDER BY created_at`,
+      [venta.id]
+    );
+
+    res.json({ ...venta, items, pagos });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error al obtener detalle de la venta' });
@@ -225,23 +283,44 @@ export const obtener = async (req, res) => {
 
 // Marcar una venta pendiente como pagada
 export const marcarPagada = async (req, res) => {
+  const client = await getClient();
   try {
     const { metodo_pago = 'efectivo' } = req.body;
     const metodos = ['efectivo', 'tarjeta', 'transferencia'];
     if (!metodos.includes(metodo_pago))
       return res.status(400).json({ error: 'Método de pago inválido' });
 
-    const { rows: [venta] } = await query(
+    await client.query('BEGIN');
+    const { rows: [venta] } = await client.query(
       `UPDATE ventas
        SET estado = 'pagada', metodo_pago = $1, monto_pagado = total
        WHERE id = $2 AND negocio_id = $3 AND estado = 'pendiente'
-       RETURNING id, folio, estado, total, metodo_pago`,
+       RETURNING id, folio, estado, total, metodo_pago, monto_pagado`,
       [metodo_pago, req.params.id, req.user.negocio_id]
     );
-    if (!venta) return res.status(404).json({ error: 'Venta no encontrada o ya está pagada' });
+    if (!venta) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Venta no encontrada o ya está pagada' }); }
+
+    // El saldo que faltaba (total - lo ya abonado con pagos previos, si los
+    // hubiera) se registra ahora en ventas_pagos con el método indicado.
+    const { rows: [{ ya_pagado }] } = await client.query(
+      `SELECT COALESCE(SUM(monto), 0) as ya_pagado FROM ventas_pagos WHERE venta_id = $1`,
+      [venta.id]
+    );
+    const faltante = parseFloat(venta.total) - parseFloat(ya_pagado);
+    if (faltante > 0) {
+      await client.query(
+        `INSERT INTO ventas_pagos (venta_id, metodo_pago, monto) VALUES ($1, $2, $3)`,
+        [venta.id, metodo_pago, faltante]
+      );
+    }
+
+    await client.query('COMMIT');
     res.json({ ...venta, mensaje: `Venta ${venta.folio} marcada como pagada` });
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error(err);
     res.status(500).json({ error: 'Error al actualizar la venta' });
+  } finally {
+    client.release();
   }
 };

@@ -63,14 +63,26 @@ export const cerrar = async (req, res) => {
     if (!corte) throw new Error('No hay caja abierta que cerrar');
 
     // Ventas capturadas durante el turno (created_at para incluir ventas atrasadas ingresadas hoy)
+    // El efectivo se calcula desde ventas_pagos (desglose real por método), no
+    // desde ventas.total — así una venta mixta (ej. $300 tarjeta + $200
+    // transferencia + resto efectivo) solo aporta a caja la parte que
+    // realmente entró en efectivo.
     const { rows: [tots] } = await client.query(
       `SELECT
-         COALESCE(SUM(total) FILTER (WHERE estado = 'pagada'), 0)                              AS total_ventas,
-         COALESCE(SUM(total) FILTER (WHERE estado = 'pagada' AND metodo_pago = 'efectivo'), 0) AS total_efectivo
-       FROM ventas
-       WHERE negocio_id = $1
-         AND created_at >= $2
-         AND created_at <= NOW()`,
+         COALESCE(SUM(v.total) FILTER (WHERE v.estado = 'pagada'), 0) AS total_ventas,
+         COALESCE((
+           SELECT SUM(vp.monto)
+           FROM ventas_pagos vp
+           JOIN ventas v2 ON v2.id = vp.venta_id
+           WHERE v2.negocio_id = v.negocio_id
+             AND v2.estado = 'pagada'
+             AND v2.created_at >= $2 AND v2.created_at <= NOW()
+             AND vp.metodo_pago = 'efectivo'
+         ), 0) AS total_efectivo
+       FROM ventas v
+       WHERE v.negocio_id = $1
+         AND v.created_at >= $2
+         AND v.created_at <= NOW()`,
       [negocio_id, corte.fecha_apertura]
     );
 
@@ -170,16 +182,27 @@ export const detalle = async (req, res) => {
     );
     if (!corte) return res.status(404).json({ error: 'Corte no encontrado' });
 
-    // Resumen de ventas del turno
+    // Resumen de ventas del turno — efectivo/tarjeta/transferencia salen del
+    // desglose real (ventas_pagos), para que una venta mixta reparta
+    // correctamente entre los 3 métodos en vez de irse completa a uno solo.
     const { rows: ventas } = await query(
       `SELECT
-         COUNT(*) FILTER (WHERE estado = 'pagada')                                              AS num_ventas,
-         COALESCE(SUM(total)     FILTER (WHERE estado = 'pagada'), 0)                          AS total_ventas,
-         COALESCE(SUM(total)     FILTER (WHERE estado = 'pagada' AND metodo_pago = 'efectivo'),      0) AS efectivo,
-         COALESCE(SUM(total)     FILTER (WHERE estado = 'pagada' AND metodo_pago = 'tarjeta'),       0) AS tarjeta,
-         COALESCE(SUM(total)     FILTER (WHERE estado = 'pagada' AND metodo_pago = 'transferencia'), 0) AS transferencia,
-         COALESCE(SUM(descuento) FILTER (WHERE estado = 'pagada'), 0)                          AS total_descuentos,
-         COALESCE(SUM(iva)       FILTER (WHERE estado = 'pagada'), 0)                          AS total_iva
+         COUNT(*) FILTER (WHERE estado = 'pagada')                     AS num_ventas,
+         COALESCE(SUM(total)     FILTER (WHERE estado = 'pagada'), 0)  AS total_ventas,
+         COALESCE(SUM(descuento) FILTER (WHERE estado = 'pagada'), 0)  AS total_descuentos,
+         COALESCE(SUM(iva)       FILTER (WHERE estado = 'pagada'), 0)  AS total_iva,
+         COALESCE((SELECT SUM(vp.monto) FROM ventas_pagos vp JOIN ventas v2 ON v2.id = vp.venta_id
+                   WHERE v2.negocio_id = ventas.negocio_id AND v2.estado = 'pagada'
+                     AND v2.created_at >= $2 AND v2.created_at <= COALESCE($3::timestamptz, NOW())
+                     AND vp.metodo_pago = 'efectivo'), 0)      AS efectivo,
+         COALESCE((SELECT SUM(vp.monto) FROM ventas_pagos vp JOIN ventas v2 ON v2.id = vp.venta_id
+                   WHERE v2.negocio_id = ventas.negocio_id AND v2.estado = 'pagada'
+                     AND v2.created_at >= $2 AND v2.created_at <= COALESCE($3::timestamptz, NOW())
+                     AND vp.metodo_pago = 'tarjeta'), 0)       AS tarjeta,
+         COALESCE((SELECT SUM(vp.monto) FROM ventas_pagos vp JOIN ventas v2 ON v2.id = vp.venta_id
+                   WHERE v2.negocio_id = ventas.negocio_id AND v2.estado = 'pagada'
+                     AND v2.created_at >= $2 AND v2.created_at <= COALESCE($3::timestamptz, NOW())
+                     AND vp.metodo_pago = 'transferencia'), 0) AS transferencia
        FROM ventas
        WHERE negocio_id = $1
          AND created_at >= $2
