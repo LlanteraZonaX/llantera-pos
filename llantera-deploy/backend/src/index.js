@@ -47,6 +47,11 @@ if (!isProd) app.use(morgan('dev'));
 // ── RUTAS ────────────────────────────────────────────────────────────────────
 app.use('/api/v1', routes);
 
+// ── RUTA TEMPORAL DE PRUEBA — BORRAR DESPUÉS DE CONFIRMAR SENTRY ────────────
+app.get('/test-error', (_req, res) => {
+  throw new Error('Prueba manual de Sentry - Llantera ZonaX');
+});
+
 // ── HEALTH CHECK (verifica también conexión a base de datos) ────────────────
 app.use(healthRoutes);
 
