@@ -5,6 +5,8 @@ import dotenv from 'dotenv';
 import routes from './routes/index.js';
 import { helmetMiddleware, apiLimiter, sanitizeBody } from './middleware/security.js';
 dotenv.config();
+import { initSentry } from './config/sentry.js';
+import healthRoutes from './routes/health.routes.js';
 
 // Advertencia clara si el JWT_SECRET no está configurado en producción
 if (!process.env.JWT_SECRET) {
@@ -45,10 +47,11 @@ if (!isProd) app.use(morgan('dev'));
 // ── RUTAS ────────────────────────────────────────────────────────────────────
 app.use('/api/v1', routes);
 
-// ── HEALTH CHECK (info mínima, sin exponer versión ni stack) ─────────────────
-app.get('/health', (_req, res) =>
-  res.json({ status: 'ok', timestamp: new Date().toISOString() })
-);
+// ── HEALTH CHECK (verifica también conexión a base de datos) ────────────────
+app.use(healthRoutes);
+
+// ── SENTRY (captura de errores) ──────────────────────────────────────────────
+initSentry(app);
 
 // ── 404 ───────────────────────────────────────────────────────────────────────
 app.use((_req, res) => res.status(404).json({ error: 'Ruta no encontrada' }));
